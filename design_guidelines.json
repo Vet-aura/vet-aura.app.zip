@@ -1,0 +1,218 @@
+{
+  "project_name": "Vetaura - Clinical AI Scribe & Practice Copilot",
+  "app_archetype": "clinical_saas_hybrid",
+  "design_philosophy": {
+    "core_concept": "Botanical Medical & Warm Precision",
+    "fusion_statement": "Combining Swiss clinical data density with warm botanical sage tones and reassuring veterinary warmth — removing cognitive fatigue for veterinarians while honoring the human-animal bond.",
+    "emotional_tone": "Calm, intensely reliable, empathetic, high-velocity clinical precision",
+    "forbidden_patterns": [
+      "No generic AI purple or violent neon gradients (#7351B7 is forbidden)",
+      "No generic Inter/Roboto for headings (use Fraunces / Plus Jakarta Sans / Outfit)",
+      "No cold sterile hospital cyan/pure blue-white aesthetic",
+      "No emoji icons (🤖🧠💭💡) for clinical features",
+      "No transparent dropdown/popover menus without solid/crystal backdrop",
+      "No center-everything alignment disease"
+    ]
+  },
+  "typography": {
+    "font_family_heading": "Fraunces, serif",
+    "font_family_ui": "Plus Jakarta Sans, sans-serif",
+    "font_family_mono": "JetBrains Mono, monospace",
+    "google_fonts_url": "https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..800;1,9..144,400..700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap",
+    "scale": {
+      "h1": "text-3xl sm:text-4xl lg:text-5xl font-serif font-semibold tracking-tight text-emerald-950 dark:text-emerald-50",
+      "h2": "text-2xl sm:text-3xl font-serif font-medium tracking-tight text-emerald-900 dark:text-emerald-100",
+      "h3": "text-lg sm:text-xl font-sans font-semibold tracking-tight text-slate-900 dark:text-slate-100",
+      "h4": "text-base font-sans font-semibold text-slate-800 dark:text-slate-200",
+      "body": "text-sm sm:text-base font-sans text-slate-600 dark:text-slate-300 leading-relaxed",
+      "caption": "text-xs font-sans text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold",
+      "code_data": "text-xs font-mono font-medium"
+    }
+  },
+  "color_palette": {
+    "theme_mode": "light_default_with_dark_mode",
+    "palette_guide": {
+      "forest_primary": {
+        "50": "#f2f7f4",
+        "100": "#e1ede6",
+        "200": "#c3dcd0",
+        "500": "#2f7d5c",
+        "600": "#236349",
+        "700": "#1c4e3b",
+        "800": "#173f30",
+        "900": "#123026",
+        "950": "#091a14"
+      },
+      "warm_amber_accent": {
+        "50": "#fffbeb",
+        "100": "#fef3c7",
+        "500": "#d97706",
+        "600": "#b45309",
+        "700": "#92400e"
+      },
+      "terracotta_alert": {
+        "50": "#fef2f2",
+        "100": "#fee2e2",
+        "500": "#ef4444",
+        "600": "#dc2626",
+        "700": "#b91c1c"
+      },
+      "slate_clinical_neutrals": {
+        "50": "#f8fafc",
+        "100": "#f1f5f9",
+        "200": "#e2e8f0",
+        "300": "#cbd5e1",
+        "500": "#64748b",
+        "700": "#334155",
+        "800": "#1e293b",
+        "900": "#0f172a"
+      },
+      "sage_canvas": {
+        "light_bg": "#f8f9f6",
+        "light_card": "#ffffff",
+        "light_subtle": "#f0f4ef",
+        "dark_bg": "#0d1411",
+        "dark_card": "#131d19",
+        "dark_subtle": "#1b2823"
+      }
+    },
+    "tokens": {
+      "primary_cta": "bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm hover:shadow active:scale-[0.99] transition-all",
+      "secondary_action": "bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800/60",
+      "ambient_recording_active": "bg-rose-500 animate-pulse text-white ring-4 ring-rose-200 dark:ring-rose-950",
+      "soap_badge_s": "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800",
+      "soap_badge_o": "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800",
+      "soap_badge_a": "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800",
+      "soap_badge_p": "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+    }
+  },
+  "layout_patterns": {
+    "app_shell": "flex h-screen w-full bg-[#f8f9f6] dark:bg-[#0d1411] overflow-hidden text-slate-800 dark:text-slate-100",
+    "sidebar": "w-64 flex-shrink-0 bg-white/90 dark:bg-[#131d19]/90 backdrop-blur-md border-r border-emerald-100 dark:border-emerald-900/40 flex flex-col justify-between p-4 z-30",
+    "main_content_area": "flex-1 flex flex-col h-full overflow-hidden bg-slate-50/50 dark:bg-slate-950/20",
+    "top_navbar": "h-16 px-6 bg-white/80 dark:bg-[#131d19]/80 backdrop-blur-md border-b border-emerald-100 dark:border-emerald-900/40 flex items-center justify-between z-20",
+    "dashboard_grid": "grid grid-cols-1 md:grid-cols-12 gap-6 p-4 sm:p-6 lg:p-8 overflow-y-auto max-w-7xl mx-auto w-full",
+    "soap_workspace_split": "grid grid-cols-1 lg:grid-cols-12 gap-6 h-full overflow-hidden p-4 sm:p-6",
+    "soap_left_queue": "lg:col-span-4 h-full flex flex-col overflow-y-auto space-y-4",
+    "soap_right_editor": "lg:col-span-8 h-full flex flex-col bg-white dark:bg-[#131d19] rounded-2xl border border-emerald-100 dark:border-emerald-900/40 shadow-sm p-6 overflow-y-auto"
+  },
+  "visual_enhancers": {
+    "card_style": "bg-white dark:bg-[#131d19] rounded-2xl border border-emerald-100/80 dark:border-emerald-900/40 shadow-[0_4px_20px_-4px_rgba(18,48,38,0.05)] hover:border-emerald-200 dark:hover:border-emerald-800/80 transition-all",
+    "glassmorphism_nav": "bg-white/80 dark:bg-[#131d19]/80 backdrop-blur-xl border border-emerald-100/50 dark:border-emerald-800/30",
+    "badge_pill": "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+    "waveform_visualizer": "flex items-center gap-1 h-8 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/40",
+    "clinical_tag": "inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-mono bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
+  },
+  "responsive": {
+    "breakpoint": "Mobile-first approach. Mobile viewports (under 768px) stack all multi-column clinical views into clean single-column cards with bottom navigation bar or collapsible sheet drawers.",
+    "layout": {
+      "mobile_nav": "Fixed bottom bar on mobile with 4 main touch points: Queue/Dashboard, Ambient Scribe, Patients, Inbox/Alerts + Top brand bar with staff switcher.",
+      "tablet_desktop": "Left expandable sidebar with full sub-navigation, multi-pane split editors for SOAP note generation alongside patient longitudinal histories and lab trend charts."
+    },
+    "typography": {
+      "headings_scaling": "h1: text-2xl on mobile -> text-4xl on desktop; h2: text-xl on mobile -> text-2xl on desktop",
+      "form_inputs": "min-h-[44px] text-base on mobile to avoid auto-zoom triggers, with clear tap zones."
+    },
+    "overflow_guard": "Ensure all table views have responsive horizontal scroll containers (overflow-x-auto) and all long clinical SOAP fields wrap with break-words.",
+    "tap_targets": "All buttons and interactive patient pills minimum 44x44px bounding hit area."
+  },
+  "image_urls": {
+    "hero_exam_dog": {
+      "url": "https://images.unsplash.com/photo-1770836037793-95bdbf190f71?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTF8MHwxfHNlYXJjaHwyfHx2ZXRlcmluYXJ5JTIwY2xpbmljJTIwY2FyZSUyMGNhdCUyMGRvZyUyMGV4YW1pbmF0aW9ufGVufDB8fHx8MTc4ODEzNDE0MHww&ixlib=rb-4.1.0&q=85",
+      "description": "A compassionate veterinarian closely examining a black and tan dachshund on an exam table",
+      "usage": "Landing page hero illustration, patient record banner, or welcome overview card"
+    },
+    "hero_exam_cat": {
+      "url": "https://images.unsplash.com/photo-1733783489145-f3d3ee7a9ccf?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwyfHxjdXRlJTIwY2F0JTIwdmV0ZXJpbmFyaWFuJTIwZXhhbSUyMGNsaW5pY3xlbnwwfHx8fDE3ODgxMzQxNDV8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Veterinary clinical examination of a cat with gentle palpation and calming handling",
+      "usage": "Feline clinical module hero, smart wellness visit template header, or patient card avatar"
+    },
+    "hero_golden_retriever": {
+      "url": "https://images.unsplash.com/photo-1631980546596-a70e0d4c7cf7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MDV8MHwxfHNlYXJjaHwzfHx2ZXRlcmluYXJpYW4lMjBleGFtaW5pbmclMjBnb2xkZW4lMjByZXRyaWV2ZXIlMjBkb2clMjBjbGluaWN8ZW58MHx8fHwxNzg4MTM0MTMyfDA&ixlib=rb-4.1.0&q=85",
+      "description": "Happy healthy golden retriever receiving attentive care from owner and staff",
+      "usage": "Client discharge summary preview, owner portal preview, or marketing showcase card"
+    },
+    "hero_exam_treatment": {
+      "url": "https://images.unsplash.com/photo-1770836037289-e00e5f351d11?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTF8MHwxfHNlYXJjaHwzfHx2ZXRlcmluYXJpYW4lMjBleGFtaW5pbmclMjBjYXJlJTIwY2F0JTIwZG9nJTIwZXhhbWluYXRpb258ZW58MHx8fHwxNzg4MTM0MTQwfDA&ixlib=rb-4.1.0&q=85",
+      "description": "Veterinarian carefully assessing a canine patient on modern clinical table",
+      "usage": "Operations and scheduling overview header or ambient scribe live mode background"
+    }
+  },
+  "key_features_and_components": {
+    "1_ambient_soap_scribe": {
+      "component_name": "AmbientSoapScribe.jsx",
+      "capabilities": [
+        "Live audio recording interface with realistic simulated or mic audio stream via Whisper API",
+        "Dual audio options: Live Mic recorder with waveform + Quick pre-recorded sample consultation selector (e.g. 'Canine Dermatology visit', 'Senior Feline Renal check', 'Post-Op Cruciate Ligament')",
+        "One-click Claude Sonnet 5 SOAP generation (Subjective, Objective, Assessment, Plan) with structured editable sections",
+        "Confidence highlights + vet sign-off status with audit trail timestamp",
+        "Instant copy, export to PDF/PIMS format, or forward to client discharge"
+      ]
+    },
+    "2_patient_and_owner_crm": {
+      "component_name": "PatientManager.jsx",
+      "capabilities": [
+        "Owner & Pet profile with species icons, breed, age, spayed/neutered tag, microchip ID",
+        "Weight tracking timeline with Interactive Recharts visualization",
+        "Vaccination status badges (Core vs Non-Core, Overdue alerts in terracotta red)",
+        "Chronological visit histories with attached signed SOAPs and diagnostic summaries"
+      ]
+    },
+    "3_clinical_decision_support": {
+      "component_name": "DifferentialDiagnosisEngine.jsx",
+      "capabilities": [
+        "Interactive Differential Diagnosis Checklist based on Signalment + Presenting Complaint + Exam Findings",
+        "Rule-in / Rule-out confidence rating tags (Likely, Secondary, Rare/Red-flag)",
+        "Recommended diagnostic workup (Blood chemistry, Ultrasound, Urinalysis, Cytology)",
+        "Smart visit templates picker: Wellness, Dermatology, Dental, Lameness, Euthanasia, Post-Op"
+      ]
+    },
+    "4_lab_monitor_and_longitudinal_trends": {
+      "component_name": "LabMonitorTrends.jsx",
+      "capabilities": [
+        "Interactive panel showing Renal (BUN, Creatinine, SDMA), Liver (ALT, ALKP), Glucose, Electrolytes",
+        "Out-of-range visual alerts with reference brackets",
+        "Longitudinal charts over time with multi-point curves (e.g. 6-month renal monitoring for CKD stages)"
+      ]
+    },
+    "5_discharge_and_multilingual_education": {
+      "component_name": "DischargeInstructionGenerator.jsx",
+      "capabilities": [
+        "Automated plain-language client instructions translated from clinical SOAP notes",
+        "Multilingual selector: English, Spanish (Español), French (Français), Mandarin (中文), German (Deutsch)",
+        "Medication schedule cards with dosage, frequency, and 'give with food' pictograms",
+        "Warning signs trigger checklist ('Call clinic immediately if...')"
+      ]
+    },
+    "6_triage_inbox_and_handoff": {
+      "component_name": "InboxTriageHandoff.jsx",
+      "capabilities": [
+        "Client message inbox with urgency tagging (Urgent, Routine, Prescription Refill, Post-Op Check)",
+        "AI-suggested empathetic responses with Vet approval button",
+        "Shift-change / Case handoff summary generator aggregating all hospitalized and high-risk patients for the incoming night or day team"
+      ]
+    },
+    "7_scheduling_and_analytics": {
+      "component_name": "ClinicOperationsSchedule.jsx",
+      "capabilities": [
+        "Daily appointment schedule with room allocations, appointment type pills, and ambient scribe quick-launch",
+        "Clinic KPI analytics: Note completion time saved, active patient counts, triage turnaround rate"
+      ]
+    }
+  },
+  "instructions_to_main_agent": [
+    "Import Google Fonts Fraunces & Plus Jakarta Sans in index.html or index.css to give the app a distinct high-end botanical-clinical look.",
+    "Ensure the entire app is 100% responsive: on mobile devices, use drawer sheets or bottom navigation so veterinarians can walk between exam rooms with an iPad or smartphone.",
+    "Always provide realistic, rich mock data for veterinary cases (e.g. 'Bella - 7yo Golden Retriever - Itchy ears & paws', 'Milo - 12yo Domestic Shorthair - Elevated Creatinine/SDMA', 'Luna - 3yo French Bulldog - Grade 2 Patellar Luxation').",
+    "Integrate seamless toggle between live mic capture and sample audio cases so the user can test instant AI transcription + Claude SOAP generation without requiring real mic permissions immediately.",
+    "Implement full MongoDB CRUD backend endpoints in FastAPI with JWT staff auth + Emergent Google SSO mock support.",
+    "Add 'data-testid' to all buttons, inputs, tabs, and key metrics as required for automated validation.",
+    "Keep color palette grounded in Botanical Forest Greens (#236349, #2f7d5c), Soft Sage (#f0f4ef), and Warm Amber (#d97706) for alerts. Never use AI generic neon purple!"
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": {
+    "typography_rules": "Use Fraunces serif for main headings and modal titles, Plus Jakarta Sans for UI labels and body, JetBrains Mono for clinical lab values and patient IDs.",
+    "contrast_rules": "Never use dark color gradients. Hover states must have higher contrast with explicit text color definitions.",
+    "toast_notifications": "Use Sonner for all save, transcribe, sign-off, and send actions with rich clinical confirmation messages.",
+    "testing_attributes": "All interactive triggers and informational badges must have descriptive kebab-case data-testid tags."
+  }
+}

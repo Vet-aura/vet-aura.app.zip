@@ -1,0 +1,110 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..800;1,9..144,400..700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+    font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #f8f9f6;
+    color: #0f172a;
+}
+
+.font-serif-display {
+    font-family: "Fraunces", ui-serif, Georgia, serif;
+    font-optical-sizing: auto;
+    letter-spacing: -0.02em;
+}
+
+.font-mono-clinical {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+    :root {
+        --background: 90 20% 97%;
+        --foreground: 158 40% 8%;
+        --card: 0 0% 100%;
+        --card-foreground: 158 40% 8%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 158 40% 8%;
+        --primary: 156 51% 26%; /* forest 600 */
+        --primary-foreground: 0 0% 100%;
+        --secondary: 120 20% 95%;
+        --secondary-foreground: 158 40% 15%;
+        --muted: 120 12% 94%;
+        --muted-foreground: 158 12% 40%;
+        --accent: 35 92% 44%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 74% 42%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 156 22% 88%;
+        --input: 156 22% 88%;
+        --ring: 156 51% 26%;
+        --chart-1: 156 51% 30%;
+        --chart-2: 35 92% 44%;
+        --chart-3: 220 65% 50%;
+        --chart-4: 355 68% 55%;
+        --chart-5: 267 55% 55%;
+        --radius: 0.75rem;
+    }
+    .dark {
+        --background: 158 30% 6%;
+        --foreground: 90 20% 96%;
+        --card: 158 25% 9%;
+        --card-foreground: 90 20% 96%;
+        --popover: 158 25% 9%;
+        --popover-foreground: 90 20% 96%;
+        --primary: 156 40% 55%;
+        --primary-foreground: 158 40% 8%;
+        --secondary: 158 20% 14%;
+        --secondary-foreground: 90 20% 96%;
+        --muted: 158 20% 14%;
+        --muted-foreground: 156 15% 62%;
+        --accent: 35 92% 55%;
+        --accent-foreground: 158 40% 8%;
+        --destructive: 0 62% 45%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 158 20% 18%;
+        --input: 158 20% 18%;
+        --ring: 156 40% 55%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+    ::selection {
+        background: #d97706;
+        color: #fff;
+    }
+}
+
+/* Waveform bar animation for ambient scribe */
+@keyframes wave {
+    0%, 100% { transform: scaleY(0.35); }
+    50% { transform: scaleY(1); }
+}
+.wave-bar {
+    animation: wave 1s ease-in-out infinite;
+    transform-origin: center;
+}
+
+/* Subtle grain texture overlay */
+.grain::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(rgba(35,99,73,0.06) 1px, transparent 1px);
+    background-size: 3px 3px;
+    opacity: 0.5;
+    mix-blend-mode: multiply;
+}

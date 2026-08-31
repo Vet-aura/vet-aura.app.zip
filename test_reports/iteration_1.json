@@ -1,0 +1,37 @@
+{
+  "summary": "First-finish smoke test of Vetaura MVP. All 13 backend endpoints verified against public URL (health, stats, patients, patient detail with nested visits/labs/weights/soap_notes, appointments, messages, scribe/soap via Claude Sonnet 5, scribe/save persistence + verified in patient detail, ai/differentials, ai/discharge, ai/handoff, messages/draft, messages/approve). Flagship Ambient Scribe frontend flow works end-to-end (sample load -> Draft SOAP -> Claude returns 4 populated S/O/A/P fields). Dashboard KPIs render correctly (4 patients, 4 appts, 3 open msgs, 1 draft). Inbox AI draft generation works (515 chars). Differentials generate + render works. Handoff generate works (backend endpoint returns full structured JSON). Landing page has both CTAs. No auth (demo mode) — intentional per user choice.",
+  "tested_scope": ["backend", "frontend", "integration"],
+  "passed": [
+    "GET /api/ -> {service:'Vetaura', status:'ok'}",
+    "GET /api/stats -> {patients:4, appointments_today:4, open_messages:4, signed_notes:0, draft_notes:0}",
+    "GET /api/patients -> 4 patients [Bella, Milo, Luna, Ollie] with owner joined",
+    "GET /api/patients/{id} -> full detail with visits/labs/weights/soap_notes arrays",
+    "GET /api/appointments -> 4 appointments with patient+owner joined",
+    "GET /api/messages -> 4 messages with patient+owner joined",
+    "POST /api/scribe/soap -> Claude Sonnet 5 returns {subjective, objective, assessment, plan, confidence, flags}",
+    "POST /api/scribe/save -> persists note (verified soap_notes count increased 0->1 in patient detail)",
+    "POST /api/ai/differentials -> returns 8 differentials + workup + questions + red_flags",
+    "POST /api/ai/discharge -> returns {greeting, summary, medications, home_care, warning_signs, recheck, closing} in Spanish",
+    "POST /api/ai/handoff -> {shift_summary, hospitalized_patients, pending_labs, owner_concerns, priority_tasks}",
+    "POST /api/messages/{mid}/draft -> {urgency, one_line_summary, draft_reply, internal_note}",
+    "POST /api/messages/{mid}/approve -> {ok:true}",
+    "Landing page (/) -> 'Try the ambient scribe' and 'Open the clinic' CTAs present",
+    "Dashboard (/app) -> KPIs render {4, 4, 3, 1}; dashboard-start-scribe present",
+    "Ambient Scribe -> sample-0 loads 593-char transcript; Draft SOAP fills all 4 fields (S=245, O=251, A=203, P=432 chars) from Claude",
+    "Inbox -> 4 messages visible; select + generate draft returns 515-char reply",
+    "Differentials -> template loads form; Generate returns workup content"
+  ],
+  "failed": [],
+  "action_items": [
+    "None blocking. Note: Ambient scribe mic recording not tested (headless, no mic — expected). Whisper /api/scribe/transcribe not tested (no audio synthesis). Auth intentionally deferred (single-clinic demo mode per user choice)."
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (6/6 tested flows)"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": {
+    "auth": "No auth — demo mode per user's MVP scope. NOT a bug.",
+    "mic_recording": "Skipped — headless environment cannot capture audio.",
+    "whisper_endpoint": "/api/scribe/transcribe not exercised (needs real audio upload); Claude LLM path fully verified via /scribe/soap.",
+    "test_credentials_file": "/app/memory/test_credentials.md exists but not needed (no auth in MVP)."
+  }
+}
