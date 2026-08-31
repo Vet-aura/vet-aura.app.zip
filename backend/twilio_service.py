@@ -1,12 +1,21 @@
-"""Twilio Voice + SMS webhooks for the AI Vet Receptionist.
+"""Twilio Voice + SMS webhooks — per-clinic BYOK (bring-your-own-keys).
 
-- Inbound Voice: TwiML greeting → <Gather input="speech"> → Claude reply → repeat.
-  Fallback: <Record> the caller's message for offline transcription + staff callback.
-- Inbound SMS: MessagingResponse with the AI reply.
-- Per-clinic phone number provisioning via Twilio IncomingPhoneNumbers.
-- Voice usage metering: each completed call increments `voice_usage` seconds for the clinic.
-- Requires TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN. Phone numbers are mapped to clinics via
-  a `twilio_numbers` collection so the same webhook URL serves all tenants.
+Compliance model: Vetaura is a pure orchestrator. Each clinic owns its Twilio account,
+creates a RESTRICTED API KEY, and pastes it into Vetaura. Inbound webhooks are addressed
+by a tokenised per-clinic URL:
+
+    /api/twilio/voice/inbound/{clinic_id}/{webhook_token}
+    /api/twilio/sms/inbound/{clinic_id}/{webhook_token}
+    /api/twilio/voice/gather/{clinic_id}/{webhook_token}
+    /api/twilio/voice/voicemail/{clinic_id}/{webhook_token}
+    /api/twilio/voice/status/{clinic_id}/{webhook_token}
+
+The clinic pastes these URLs into their Twilio number/messaging-service config in the
+Twilio Console. Because the token is random per clinic and known only to the clinic and
+Vetaura, no outside caller can spoof requests. We also require the incoming To=/From=
+fields to correspond to a Twilio number registered to the clinic.
+
+Outbound API calls (provisioning, SMS sends) use the clinic's API-Key-based client.
 """
 from __future__ import annotations
 import os
@@ -14,47 +23,29 @@ import uuid
 import logging
 from datetime import datetime, timezone
 from typing import Optional
-from urllib.parse import urlencode
 
 from fastapi import APIRouter, Request, HTTPException, Depends, Response
-from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from credentials_service import get_twilio_creds, get_twilio_creds_by_token, get_twilio_client_from_creds
+from sms_compliance import (
+    is_stop_message, is_help_message, is_start_message, STOP_ACK,
+    record_consent_transition, has_active_consent, build_help_reply, can_send_sms,
+)
+
 logger = logging.getLogger(__name__)
 
-TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
-TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
-TWILIO_VOICE_WEBHOOK_BASE = os.environ.get("PUBLIC_APP_URL", "")  # e.g. https://vetaura.com
+TWILIO_VOICE_WEBHOOK_BASE = os.environ.get("PUBLIC_APP_URL", "")
 
 
-def twilio_configured() -> bool:
-    return bool(TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN)
+def _twiml(body: str) -> Response:
+    xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<Response>{body}</Response>'
+    return Response(content=xml, media_type="application/xml")
 
 
-if not TWILIO_AUTH_TOKEN:
-    logger.warning("Twilio auth token is unset — signature validation is bypassed. Do NOT ship this to production.")
-
-
-def _get_twilio_client():
-    if not twilio_configured():
-        raise HTTPException(503, "Twilio is not configured on this instance.")
-    from twilio.rest import Client
-    return Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-
-
-def _validate_signature(request: Request, body_params: dict) -> bool:
-    """Verify X-Twilio-Signature. Falls open in dev when TWILIO_AUTH_TOKEN is unset."""
-    if not TWILIO_AUTH_TOKEN:
-        return True  # dev / demo bypass
-    try:
-        from twilio.request_validator import RequestValidator
-        validator = RequestValidator(TWILIO_AUTH_TOKEN)
-        sig = request.headers.get("X-Twilio-Signature", "")
-        url = str(request.url)
-        return validator.validate(url, body_params, sig)
-    except Exception:
-        return False
+def _escape(text: str) -> str:
+    return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 class ProvisionReq(BaseModel):
@@ -66,93 +57,91 @@ class ReleaseReq(BaseModel):
     phone_sid: str
 
 
-class VoicemailStatusReq(BaseModel):
-    session_id: str
+class OutboundSmsReq(BaseModel):
+    phone_e164: str
+    body: str
+    message_type: str = "care"   # 'care' or 'marketing'
 
 
-def _twiml(body: str) -> Response:
-    xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<Response>{body}</Response>'
-    return Response(content=xml, media_type="application/xml")
-
-
-def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep, receptionist_reply_fn, get_or_create_config_fn, emergency_kw_fn, create_task_fn, transcribe_audio_fn):
+def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep,
+                        receptionist_reply_fn, get_or_create_config_fn,
+                        emergency_kw_fn, create_task_fn, transcribe_audio_fn):
     router = APIRouter(prefix="/api/twilio")
 
-    async def _clinic_from_number(to_number: str) -> Optional[dict]:
-        return await db.twilio_numbers.find_one({"phone_number": to_number}, {"_id": 0})
-
-    async def _log_usage(clinic_id: str, kind: str, seconds: int = 0, cost_cents: int = 0, metadata: dict | None = None):
+    async def _log_usage(clinic_id: str, kind: str, seconds: int = 0, metadata: dict | None = None):
         await db.voice_usage.insert_one({
             "id": str(uuid.uuid4()),
             "clinic_id": clinic_id,
-            "kind": kind,  # 'voice' | 'sms'
+            "kind": kind,
             "seconds": int(seconds or 0),
-            "cost_cents": int(cost_cents or 0),
             "metadata": metadata or {},
             "at": datetime.now(timezone.utc).isoformat(),
         })
 
-    # ---------- Public webhooks ----------
-    @router.post("/voice/inbound")
-    async def voice_inbound(request: Request):
-        form = dict(await request.form())
-        if not _validate_signature(request, form):
-            raise HTTPException(403, "Invalid Twilio signature")
+    async def _load_ctx(clinic_id: str, webhook_token: str, form: dict) -> Optional[dict]:
+        """Validate token and return {creds, binding, cfg} for the request."""
+        creds = await get_twilio_creds_by_token(db, clinic_id, webhook_token)
+        if not creds:
+            return None
         to_number = form.get("To", "")
-        from_number = form.get("From", "")
-        call_sid = form.get("CallSid", "")
-
-        binding = await _clinic_from_number(to_number)
+        binding = await db.twilio_numbers.find_one({"clinic_id": clinic_id, "phone_number": to_number}, {"_id": 0})
         if not binding:
+            return None
+        cfg = await get_or_create_config_fn(clinic_id)
+        return {"creds": creds, "binding": binding, "cfg": cfg}
+
+    # ---------------- Public webhooks ----------------
+    @router.post("/voice/inbound/{clinic_id}/{webhook_token}")
+    async def voice_inbound(clinic_id: str, webhook_token: str, request: Request):
+        form = dict(await request.form())
+        ctx = await _load_ctx(clinic_id, webhook_token, form)
+        if not ctx:
             return _twiml('<Say voice="alice">This number is not configured. Goodbye.</Say><Hangup/>')
 
-        cfg = await get_or_create_config_fn(binding["clinic_id"])
-        greeting = cfg.get("greeting") or f"Thank you for calling {cfg.get('clinic_name','our clinic')}."
-        # Start a session keyed on the CallSid so gather steps chain.
+        cfg = ctx["cfg"]
+        call_sid = form.get("CallSid", "")
+        from_number = form.get("From", "")
+        greeting = cfg.get("greeting") or f"Thank you for calling {cfg.get('clinic_name', 'our clinic')}."
         session_id = f"twilio_{call_sid}"
         await db.receptionist_sessions.update_one(
-            {"session_id": session_id, "clinic_id": binding["clinic_id"]},
+            {"session_id": session_id, "clinic_id": clinic_id},
             {"$setOnInsert": {
-                "session_id": session_id, "clinic_id": binding["clinic_id"],
+                "session_id": session_id, "clinic_id": clinic_id,
                 "transcript": [], "created_at": datetime.now(timezone.utc).isoformat(),
                 "channel": "voice", "from_number": from_number, "call_sid": call_sid,
                 "status": "active", "handed_off": False,
             }},
             upsert=True,
         )
-        gather_action = "/api/twilio/voice/gather"
+        gather = f"/api/twilio/voice/gather/{clinic_id}/{webhook_token}"
+        vm = f"/api/twilio/voice/voicemail/{clinic_id}/{webhook_token}"
         body = (
-            f'<Say voice="alice">{greeting}</Say>'
-            f'<Gather input="speech" action="{gather_action}" method="POST" speechTimeout="auto" timeout="6" language="en-US">'
+            f'<Say voice="alice">{_escape(greeting)}</Say>'
+            f'<Gather input="speech" action="{gather}" method="POST" speechTimeout="auto" timeout="6" language="en-US">'
             f'<Say voice="alice">How can I help you today?</Say>'
             f'</Gather>'
-            f'<Say voice="alice">I did not catch that. Please call again or leave a message after the beep.</Say>'
-            f'<Record maxLength="90" action="/api/twilio/voice/voicemail" method="POST"/>'
+            f'<Say voice="alice">I did not catch that. Please leave a message after the beep.</Say>'
+            f'<Record maxLength="90" action="{vm}" method="POST"/>'
         )
         return _twiml(body)
 
-    @router.post("/voice/gather")
-    async def voice_gather(request: Request):
+    @router.post("/voice/gather/{clinic_id}/{webhook_token}")
+    async def voice_gather(clinic_id: str, webhook_token: str, request: Request):
         form = dict(await request.form())
-        if not _validate_signature(request, form):
-            raise HTTPException(403, "Invalid Twilio signature")
-        to_number = form.get("To", "")
+        ctx = await _load_ctx(clinic_id, webhook_token, form)
+        if not ctx:
+            return _twiml('<Hangup/>')
+        cfg = ctx["cfg"]
         call_sid = form.get("CallSid", "")
         speech = (form.get("SpeechResult") or "").strip()
-        binding = await _clinic_from_number(to_number)
-        if not binding:
-            return _twiml('<Hangup/>')
-        cfg = await get_or_create_config_fn(binding["clinic_id"])
         session_id = f"twilio_{call_sid}"
-        session = await db.receptionist_sessions.find_one({"session_id": session_id, "clinic_id": binding["clinic_id"]}, {"_id": 0}) or {"transcript": []}
+        session = await db.receptionist_sessions.find_one({"session_id": session_id, "clinic_id": clinic_id}, {"_id": 0}) or {"transcript": []}
         transcript = session.get("transcript", [])
+        gather = f"/api/twilio/voice/gather/{clinic_id}/{webhook_token}"
+        vm = f"/api/twilio/voice/voicemail/{clinic_id}/{webhook_token}"
 
         if not speech:
-            body = (
-                '<Say voice="alice">Sorry, I did not hear you. Please leave a brief message after the beep and a human will call you back.</Say>'
-                '<Record maxLength="90" action="/api/twilio/voice/voicemail" method="POST"/>'
-            )
-            return _twiml(body)
+            return _twiml(f'<Say voice="alice">Sorry, I did not hear you. Please leave a brief message after the beep.</Say><Record maxLength="90" action="{vm}" method="POST"/>')
 
         kw = emergency_kw_fn(speech)
         resp = await receptionist_reply_fn(cfg, transcript, speech)
@@ -165,51 +154,43 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep, receptionist_reply_f
         transcript.append({"role": "assistant", "text": resp.get("reply", ""), "at": datetime.now(timezone.utc).isoformat(),
                            "channel": "voice", "meta": {"handoff": resp.get("handoff"), "emergency": resp.get("emergency_detected", False)}})
         await db.receptionist_sessions.update_one(
-            {"session_id": session_id, "clinic_id": binding["clinic_id"]},
+            {"session_id": session_id, "clinic_id": clinic_id},
             {"$set": {"transcript": transcript, "last_activity": datetime.now(timezone.utc).isoformat(),
                       "handed_off": resp.get("handoff") in ("needed", "urgent")}},
         )
 
-        reply_text = resp.get("reply", "")
-        # SSML-escape a few
-        reply_text_safe = (reply_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
-
+        reply_safe = _escape(resp.get("reply", ""))
         if resp.get("handoff") == "urgent":
-            body = f'<Say voice="alice">{reply_text_safe}</Say><Hangup/>'
-            # Route to staff inbox
-            await create_task_fn(db, binding["clinic_id"], None,
+            await create_task_fn(db, clinic_id, None,
                                  title="URGENT — phone caller reported an emergency",
                                  description=f"Caller: {form.get('From','')} · Said: {speech}",
                                  priority="urgent", source="twilio_voice", source_id=call_sid, due_days=0)
-        else:
-            body = (
-                f'<Say voice="alice">{reply_text_safe}</Say>'
-                f'<Gather input="speech" action="/api/twilio/voice/gather" method="POST" speechTimeout="auto" timeout="6" language="en-US">'
-                f'<Say voice="alice">Anything else?</Say>'
-                f'</Gather>'
-                f'<Say voice="alice">Thanks for calling. Goodbye.</Say>'
-                f'<Hangup/>'
-            )
-        return _twiml(body)
+            return _twiml(f'<Say voice="alice">{reply_safe}</Say><Hangup/>')
+        return _twiml(
+            f'<Say voice="alice">{reply_safe}</Say>'
+            f'<Gather input="speech" action="{gather}" method="POST" speechTimeout="auto" timeout="6" language="en-US">'
+            f'<Say voice="alice">Anything else?</Say>'
+            f'</Gather>'
+            f'<Say voice="alice">Thanks for calling. Goodbye.</Say><Hangup/>'
+        )
 
-    @router.post("/voice/voicemail")
-    async def voice_voicemail(request: Request):
+    @router.post("/voice/voicemail/{clinic_id}/{webhook_token}")
+    async def voice_voicemail(clinic_id: str, webhook_token: str, request: Request):
         form = dict(await request.form())
-        if not _validate_signature(request, form):
-            raise HTTPException(403, "Invalid Twilio signature")
-        to_number = form.get("To", "")
+        ctx = await _load_ctx(clinic_id, webhook_token, form)
+        if not ctx:
+            return _twiml('<Hangup/>')
         call_sid = form.get("CallSid", "")
         recording_url = form.get("RecordingUrl", "")
         rec_duration = int(form.get("RecordingDuration", "0") or "0")
-        binding = await _clinic_from_number(to_number)
-        if not binding:
-            return _twiml('<Hangup/>')
-        # Log voicemail message and task; transcription is best-effort (Whisper).
+
         transcript_text = ""
         try:
             if recording_url:
                 import httpx, base64
-                auth = base64.b64encode(f"{TWILIO_ACCOUNT_SID}:{TWILIO_AUTH_TOKEN}".encode()).decode()
+                creds = ctx["creds"]
+                # Twilio recordings need auth; use API Key SID + Secret
+                auth = base64.b64encode(f"{creds['api_key_sid']}:{creds['api_key_secret']}".encode()).decode()
                 async with httpx.AsyncClient(timeout=30) as c:
                     r = await c.get(recording_url + ".mp3", headers={"Authorization": f"Basic {auth}"})
                     if r.status_code == 200:
@@ -219,7 +200,7 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep, receptionist_reply_f
 
         await db.messages.insert_one({
             "id": str(uuid.uuid4()),
-            "clinic_id": binding["clinic_id"],
+            "clinic_id": clinic_id,
             "received_at": datetime.now(timezone.utc).isoformat(),
             "channel": "Phone voicemail",
             "subject": f"Voicemail from {form.get('From','unknown')}",
@@ -228,43 +209,70 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep, receptionist_reply_f
             "category": "routine",
             "draft": None,
         })
-        await create_task_fn(db, binding["clinic_id"], None,
+        await create_task_fn(db, clinic_id, None,
                              title=f"Return voicemail from {form.get('From','unknown')}",
                              description=(transcript_text or "See recording in Twilio console")[:300],
                              priority="high", source="twilio_voicemail", source_id=call_sid, due_days=0)
-        await _log_usage(binding["clinic_id"], "voice", seconds=rec_duration, metadata={"call_sid": call_sid, "voicemail": True})
+        await _log_usage(clinic_id, "voice", seconds=rec_duration, metadata={"call_sid": call_sid, "voicemail": True})
         return _twiml('<Say voice="alice">Thank you. A staff member will call you back. Goodbye.</Say><Hangup/>')
 
-    @router.post("/voice/status")
-    async def voice_status(request: Request):
-        """Twilio status callback — meters completed call duration for overage billing."""
+    @router.post("/voice/status/{clinic_id}/{webhook_token}")
+    async def voice_status(clinic_id: str, webhook_token: str, request: Request):
         form = dict(await request.form())
-        if not _validate_signature(request, form):
-            raise HTTPException(403, "Invalid Twilio signature")
-        to_number = form.get("To", "")
+        ctx = await _load_ctx(clinic_id, webhook_token, form)
+        if not ctx:
+            return {"ok": False}
         call_sid = form.get("CallSid", "")
         call_status = form.get("CallStatus", "")
         duration = int(form.get("CallDuration", "0") or "0")
-        binding = await _clinic_from_number(to_number)
-        if not binding or call_status != "completed" or duration <= 0:
-            return {"ok": True}
-        await _log_usage(binding["clinic_id"], "voice", seconds=duration, metadata={"call_sid": call_sid})
+        if call_status == "completed" and duration > 0:
+            await _log_usage(clinic_id, "voice", seconds=duration, metadata={"call_sid": call_sid})
         return {"ok": True}
 
-    @router.post("/sms/inbound")
-    async def sms_inbound(request: Request):
+    @router.post("/sms/inbound/{clinic_id}/{webhook_token}")
+    async def sms_inbound(clinic_id: str, webhook_token: str, request: Request):
         form = dict(await request.form())
-        if not _validate_signature(request, form):
-            raise HTTPException(403, "Invalid Twilio signature")
-        to_number = form.get("To", "")
+        ctx = await _load_ctx(clinic_id, webhook_token, form)
+        if not ctx:
+            return _twiml('<Message>This number is not configured.</Message>')
+        cfg = ctx["cfg"]
         from_number = form.get("From", "")
         body_in = (form.get("Body") or "").strip()
-        binding = await _clinic_from_number(to_number)
-        if not binding:
-            return _twiml('<Message>This number is not configured.</Message>')
-        cfg = await get_or_create_config_fn(binding["clinic_id"])
+
+        # 1) STOP / HELP / START — deterministic, must run BEFORE any AI.
+        profile = await db.sms_compliance_profiles.find_one({"clinic_id": clinic_id}) or {}
+        clinic_name = cfg.get("clinic_name", "Our clinic")
+        if is_stop_message(body_in):
+            # Opt out of BOTH consent types when a keyword STOP is received.
+            for ct in ("care", "marketing"):
+                await record_consent_transition(db, clinic_id, from_number, ct, "opt_out",
+                                                source="sms_keyword_stop", disclosure_version="",
+                                                actor="twilio_inbound", notes=f"body: {body_in[:60]}")
+            await _log_usage(clinic_id, "sms", metadata={"from": from_number, "keyword": "STOP"})
+            return _twiml(f'<Message>{_escape(STOP_ACK)}</Message>')
+        if is_help_message(body_in):
+            reply = build_help_reply(profile, clinic_name)
+            await _log_usage(clinic_id, "sms", metadata={"from": from_number, "keyword": "HELP"})
+            return _twiml(f'<Message>{_escape(reply)}</Message>')
+        if is_start_message(body_in):
+            await record_consent_transition(db, clinic_id, from_number, "care", "opt_in",
+                                            source="sms_keyword_start", disclosure_version="",
+                                            actor="twilio_inbound", notes=f"body: {body_in[:60]}")
+            await _log_usage(clinic_id, "sms", metadata={"from": from_number, "keyword": "START"})
+            return _twiml(f'<Message>{_escape(clinic_name)}: You are resubscribed to appointment reminders and care updates. Reply STOP to opt out at any time.</Message>')
+
+        # 2) AI reply — if no prior consent AND no prior STOP, auto-opt-in from client-initiated inbound.
+        prior_stop = await db.consent_events.find_one({
+            "clinic_id": clinic_id, "phone_e164": from_number,
+            "consent_type": "care", "action": "opt_out"
+        })
+        if not prior_stop and not await has_active_consent(db, clinic_id, from_number, "care"):
+            await record_consent_transition(db, clinic_id, from_number, "care", "opt_in",
+                                            source="sms_client_initiated", disclosure_version="inbound_reply_v1",
+                                            actor="twilio_inbound", notes="Auto-opt-in from client-initiated inbound.")
+
         session_id = f"sms_{from_number}"
-        session = await db.receptionist_sessions.find_one({"session_id": session_id, "clinic_id": binding["clinic_id"]}, {"_id": 0}) or {"transcript": []}
+        session = await db.receptionist_sessions.find_one({"session_id": session_id, "clinic_id": clinic_id}, {"_id": 0}) or {"transcript": []}
         transcript = session.get("transcript", [])
         kw = emergency_kw_fn(body_in)
         resp = await receptionist_reply_fn(cfg, transcript, body_in)
@@ -276,40 +284,61 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep, receptionist_reply_f
         transcript.append({"role": "user", "text": body_in, "at": datetime.now(timezone.utc).isoformat(), "channel": "sms"})
         transcript.append({"role": "assistant", "text": resp.get("reply", ""), "at": datetime.now(timezone.utc).isoformat(), "channel": "sms"})
         await db.receptionist_sessions.update_one(
-            {"session_id": session_id, "clinic_id": binding["clinic_id"]},
-            {"$set": {"clinic_id": binding["clinic_id"], "session_id": session_id, "transcript": transcript,
+            {"session_id": session_id, "clinic_id": clinic_id},
+            {"$set": {"clinic_id": clinic_id, "session_id": session_id, "transcript": transcript,
                       "channel": "sms", "from_number": from_number,
                       "last_activity": datetime.now(timezone.utc).isoformat()}},
             upsert=True,
         )
         if resp.get("handoff") in ("needed", "urgent"):
-            await create_task_fn(db, binding["clinic_id"], None,
+            await create_task_fn(db, clinic_id, None,
                                  title=("URGENT SMS — possible emergency" if resp.get("handoff") == "urgent" else f"SMS handoff — {from_number}"),
                                  description=body_in[:400],
                                  priority=("urgent" if resp.get("handoff") == "urgent" else "high"),
                                  source="twilio_sms", source_id=from_number, due_days=0)
-        await _log_usage(binding["clinic_id"], "sms", seconds=0, metadata={"from": from_number})
-        reply_safe = (resp.get("reply", "") or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        return _twiml(f'<Message>{reply_safe}</Message>')
+        await _log_usage(clinic_id, "sms", metadata={"from": from_number})
+        reply_safe = _escape(resp.get("reply", ""))
+        # Always append a compliant sender identifier + opt-out footer on outbound care SMS.
+        footer = f" — {clinic_name}. Reply STOP to opt out."
+        # avoid busting Twilio's 1600-char SMS body limit
+        content = (reply_safe[:1400] + footer)[:1590]
+        return _twiml(f'<Message>{content}</Message>')
 
-    # ---------- Authenticated: number provisioning + usage ----------
+    # ---------------- Authenticated: status + number mgmt + outbound send ----------------
     @router.get("/status")
     async def status_check(user=Depends(auth_dep)):
         cid = user["clinic_id"]
+        creds = await db.twilio_credentials.find_one({"clinic_id": cid}, {"_id": 0})
         number = await db.twilio_numbers.find_one({"clinic_id": cid}, {"_id": 0})
-        return {"configured": twilio_configured(), "number": number}
+        base = TWILIO_VOICE_WEBHOOK_BASE.rstrip("/") if TWILIO_VOICE_WEBHOOK_BASE else ""
+        webhooks = None
+        if creds and creds.get("webhook_token") and base:
+            tok = creds["webhook_token"]
+            webhooks = {
+                "voice_url": f"{base}/api/twilio/voice/inbound/{cid}/{tok}",
+                "voice_status_callback": f"{base}/api/twilio/voice/status/{cid}/{tok}",
+                "sms_url": f"{base}/api/twilio/sms/inbound/{cid}/{tok}",
+            }
+        return {
+            "connected": bool(creds),
+            "number": number,
+            "messaging_service_sid": creds.get("messaging_service_sid") if creds else None,
+            "webhooks": webhooks,
+        }
 
     @router.post("/provision")
     async def provision(req: ProvisionReq, user=Depends(auth_dep)):
-        """Search for available Twilio numbers and assign one to this clinic."""
-        client = _get_twilio_client()
-        if not TWILIO_VOICE_WEBHOOK_BASE:
-            raise HTTPException(500, "Server is missing PUBLIC_APP_URL — refusing to provision without a public webhook base.")
+        """Search for available Twilio numbers on the CLINIC'S OWN Twilio account and assign one."""
         cid = user["clinic_id"]
-        # Only one number per clinic in MVP
+        creds = await get_twilio_creds(db, cid)
+        if not creds:
+            raise HTTPException(400, "Connect your Twilio account first.")
+        if not TWILIO_VOICE_WEBHOOK_BASE:
+            raise HTTPException(500, "Server is missing PUBLIC_APP_URL; cannot configure webhooks.")
         if await db.twilio_numbers.find_one({"clinic_id": cid}):
             raise HTTPException(400, "This clinic already has a number. Release it first.")
         try:
+            client = get_twilio_client_from_creds(creds)
             search_kwargs = {"sms_enabled": True, "voice_enabled": True, "limit": 5}
             if req.area_code:
                 search_kwargs["area_code"] = req.area_code
@@ -317,15 +346,16 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep, receptionist_reply_f
             if not available:
                 raise HTTPException(404, "No numbers available for that area code.")
             chosen = available[0]
-            base = TWILIO_VOICE_WEBHOOK_BASE.rstrip("/") if TWILIO_VOICE_WEBHOOK_BASE else ""
+            base = TWILIO_VOICE_WEBHOOK_BASE.rstrip("/")
+            tok = creds["webhook_token"]
             purchased = client.incoming_phone_numbers.create(
                 phone_number=chosen.phone_number,
                 friendly_name=req.friendly_name or f"Vetaura · {cid}",
-                voice_url=f"{base}/api/twilio/voice/inbound" if base else None,
+                voice_url=f"{base}/api/twilio/voice/inbound/{cid}/{tok}",
                 voice_method="POST",
-                status_callback=f"{base}/api/twilio/voice/status" if base else None,
+                status_callback=f"{base}/api/twilio/voice/status/{cid}/{tok}",
                 status_callback_method="POST",
-                sms_url=f"{base}/api/twilio/sms/inbound" if base else None,
+                sms_url=f"{base}/api/twilio/sms/inbound/{cid}/{tok}",
                 sms_method="POST",
             )
         except HTTPException:
@@ -348,33 +378,57 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep, receptionist_reply_f
 
     @router.post("/release")
     async def release(req: ReleaseReq, user=Depends(auth_dep)):
-        client = _get_twilio_client()
         cid = user["clinic_id"]
+        creds = await get_twilio_creds(db, cid)
+        if not creds:
+            raise HTTPException(400, "Connect your Twilio account first.")
         number = await db.twilio_numbers.find_one({"clinic_id": cid, "phone_sid": req.phone_sid})
         if not number:
             raise HTTPException(404, "Number not found for this clinic")
         try:
+            client = get_twilio_client_from_creds(creds)
             client.incoming_phone_numbers(req.phone_sid).delete()
         except Exception as e:
             logger.warning(f"Twilio release warning: {e}")
         await db.twilio_numbers.delete_one({"phone_sid": req.phone_sid, "clinic_id": cid})
         return {"ok": True}
 
+    @router.post("/sms/send")
+    async def send_sms(req: OutboundSmsReq, user=Depends(auth_dep)):
+        cid = user["clinic_id"]
+        if req.message_type not in ("care", "marketing"):
+            raise HTTPException(400, "message_type must be 'care' or 'marketing'")
+        allowed, reason = await can_send_sms(db, cid, req.phone_e164, req.message_type)
+        if not allowed:
+            raise HTTPException(400, f"SMS blocked: {reason}")
+        creds = await get_twilio_creds(db, cid)
+        if not creds or not creds.get("messaging_service_sid"):
+            raise HTTPException(400, "Messaging Service is not connected.")
+        try:
+            client = get_twilio_client_from_creds(creds)
+            cfg = await get_or_create_config_fn(cid)
+            clinic_name = cfg.get("clinic_name", "Our clinic")
+            body = (req.body or "").strip()[:1400] + f" — {clinic_name}. Reply STOP to opt out."
+            msg = client.messages.create(
+                messaging_service_sid=creds["messaging_service_sid"],
+                to=req.phone_e164,
+                body=body,
+            )
+        except Exception as e:
+            raise HTTPException(500, f"Twilio send failed: {e}")
+        await _log_usage(cid, "sms", metadata={"to": req.phone_e164, "sid": msg.sid, "type": req.message_type})
+        return {"ok": True, "sid": msg.sid, "status": msg.status}
+
     @router.get("/usage")
     async def usage(user=Depends(auth_dep)):
         cid = user["clinic_id"]
-        pipeline = [
+        rows = await db.voice_usage.aggregate([
             {"$match": {"clinic_id": cid}},
             {"$group": {"_id": "$kind", "seconds": {"$sum": "$seconds"}, "count": {"$sum": 1}}},
-        ]
-        rows = await db.voice_usage.aggregate(pipeline).to_list(10)
+        ]).to_list(10)
         totals = {r["_id"]: {"seconds": r["seconds"], "count": r["count"]} for r in rows}
         voice_seconds = totals.get("voice", {}).get("seconds", 0)
         sms_count = totals.get("sms", {}).get("count", 0)
-        return {
-            "voice_seconds": voice_seconds,
-            "voice_minutes": round(voice_seconds / 60, 1),
-            "sms_count": sms_count,
-        }
+        return {"voice_seconds": voice_seconds, "voice_minutes": round(voice_seconds / 60, 1), "sms_count": sms_count}
 
     return router

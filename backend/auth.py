@@ -21,7 +21,8 @@ class SignupReq(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
     name: str = Field(min_length=1)
-    clinic_name: str = Field(min_length=1)
+    clinic_name: str | None = None
+    invite_token: str | None = None
 
 
 class LoginReq(BaseModel):
@@ -153,13 +154,34 @@ def build_auth_routes(db: AsyncIOMotorDatabase):
     async def signup(req: SignupReq, response: Response):
         if await db.users.find_one({"email": req.email.lower()}):
             raise HTTPException(400, "Email already registered")
-        clinic = await _create_clinic(db, req.clinic_name, req.email.lower())
+
+        # Invite flow: attach to existing clinic
+        invite = None
+        if req.invite_token:
+            invite = await db.invitations.find_one({"token": req.invite_token, "status": "pending"})
+            if not invite:
+                raise HTTPException(400, "Invitation link is invalid or already used.")
+            if invite["email"].lower() != req.email.lower():
+                raise HTTPException(400, "Invitation email does not match your signup email.")
+            if invite["expires_at"] < datetime.now(timezone.utc).isoformat():
+                await db.invitations.update_one({"_id": invite["_id"]}, {"$set": {"status": "expired"}})
+                raise HTTPException(400, "This invitation has expired.")
+            clinic = await db.clinics.find_one({"clinic_id": invite["clinic_id"]}, {"_id": 0})
+            if not clinic:
+                raise HTTPException(400, "Clinic no longer exists.")
+            role = invite["role"]
+        else:
+            if not (req.clinic_name or "").strip():
+                raise HTTPException(400, "Clinic name is required for new sign-ups.")
+            clinic = await _create_clinic(db, req.clinic_name, req.email.lower())
+            role = "owner"
+
         user = {
             "user_id": f"user_{uuid.uuid4().hex[:12]}",
             "clinic_id": clinic["clinic_id"],
             "email": req.email.lower(),
             "name": req.name,
-            "role": "owner",
+            "role": role,
             "picture": None,
             "password_hash": _hash(req.password),
             "auth_method": "password",
@@ -167,6 +189,15 @@ def build_auth_routes(db: AsyncIOMotorDatabase):
         }
         await db.users.insert_one(user)
         user.pop("_id", None)
+
+        if invite:
+            await db.invitations.update_one(
+                {"_id": invite["_id"]},
+                {"$set": {"status": "accepted",
+                          "accepted_at": datetime.now(timezone.utc).isoformat(),
+                          "accepted_by_user_id": user["user_id"]}},
+            )
+
         token = _issue_jwt(user["user_id"])
         return {"token": token, "user": {**{k: user[k] for k in ("user_id", "clinic_id", "email", "name", "role", "picture")}, "clinic": clinic}}
 

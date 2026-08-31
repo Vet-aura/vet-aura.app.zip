@@ -24,6 +24,10 @@ from stripe_service import ensure_catalog, build_stripe_routes, get_tax_mode
 from scribe_templates import build_template_routes, get_template, template_prompt_block
 from tryit_service import build_tryit_routes
 from twilio_service import build_twilio_routes
+from credentials_service import build_credentials_routes
+from sms_compliance import build_compliance_routes
+from invitations import build_invitation_routes, build_public_invite_routes
+from billing_cycle import build_billing_cycle_routes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("vetaura")
@@ -105,6 +109,12 @@ class DischargeReq(BaseModel):
     language: str = "English"
     patient_id: Optional[str] = None
     share: bool = False  # create public link
+    email_to: Optional[str] = None  # optional pet-owner email
+
+
+class DischargeEmailReq(BaseModel):
+    token: str
+    email_to: str
 
 
 class ReplyReq(BaseModel):
@@ -467,7 +477,7 @@ async def ai_diffs(req: DifferentialReq, user=Depends(auth_dep)):
 async def ai_discharge(req: DischargeReq, user=Depends(auth_dep)):
     result = await generate_discharge(req.pet_name, req.plan_notes, req.language)
     await audit(user, "ai_discharge", metadata={"language": req.language})
-    if req.share:
+    if req.share or req.email_to:
         token = uuid.uuid4().hex
         clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
         share_doc = {
@@ -488,7 +498,63 @@ async def ai_discharge(req: DischargeReq, user=Depends(auth_dep)):
         await db.discharge_shares.insert_one(share_doc)
         result = {**result, "share_token": token}
         await audit(user, "discharge_shared", metadata={"token": token, "pet": req.pet_name})
+
+        if req.email_to:
+            from email_service import send_email, EmailNotConfigured, EmailSendFailed
+            base = os.environ.get("PUBLIC_APP_URL", "").rstrip("/")
+            portal_url = f"{base}/d/{token}" if base else f"/d/{token}"
+            clinic_name = share_doc["clinic_name"]
+            try:
+                await send_email(
+                    db, user["clinic_id"],
+                    to=req.email_to,
+                    subject=f"{clinic_name}: Discharge instructions for {req.pet_name}",
+                    html=f"""<div style='font-family:system-ui,sans-serif;line-height:1.6;color:#0b3a2f'>
+                      <h2 style='font-family:Georgia,serif;color:#0b3a2f;margin:0 0 8px'>Discharge instructions for {req.pet_name}</h2>
+                      <p style='color:#4b5563;margin:0 0 16px'>From {clinic_name}</p>
+                      <p>Your personalised discharge portal is ready. Tap below to view meds, red-flag warning signs, and next-visit info in plain language ({req.language}).</p>
+                      <p style='margin:24px 0'><a href='{portal_url}' style='display:inline-block;background:#236349;color:#fff;padding:12px 20px;border-radius:999px;text-decoration:none;font-weight:600'>Open discharge portal</a></p>
+                      <p style='color:#4b5563;font-size:12px'>If you have questions, please reply to this email or call {clinic_name}.</p>
+                    </div>""",
+                    text=f"{clinic_name}: Discharge instructions for {req.pet_name}. View at {portal_url}",
+                )
+                result["email_delivered"] = True
+                await audit(user, "discharge_emailed", metadata={"token": token, "email": req.email_to})
+            except EmailNotConfigured:
+                result["email_delivered"] = False
+                result["email_error"] = "email_not_configured"
+            except EmailSendFailed as e:
+                result["email_delivered"] = False
+                result["email_error"] = str(e)[:200]
     return result
+
+
+@api.post("/discharge/email")
+async def discharge_email(req: DischargeEmailReq, user=Depends(auth_dep)):
+    doc = await db.discharge_shares.find_one({"token": req.token, "clinic_id": user["clinic_id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Discharge not found.")
+    from email_service import send_email, EmailNotConfigured, EmailSendFailed
+    base = os.environ.get("PUBLIC_APP_URL", "").rstrip("/")
+    portal_url = f"{base}/d/{req.token}" if base else f"/d/{req.token}"
+    clinic_name = doc.get("clinic_name") or "Your veterinary clinic"
+    try:
+        await send_email(
+            db, user["clinic_id"],
+            to=req.email_to,
+            subject=f"{clinic_name}: Discharge instructions for {doc.get('pet_name','your pet')}",
+            html=f"""<div style='font-family:system-ui,sans-serif;line-height:1.6;color:#0b3a2f'>
+              <h2 style='font-family:Georgia,serif;color:#0b3a2f;margin:0 0 8px'>Discharge instructions for {doc.get('pet_name','your pet')}</h2>
+              <p style='color:#4b5563;margin:0 0 16px'>From {clinic_name}</p>
+              <p style='margin:24px 0'><a href='{portal_url}' style='display:inline-block;background:#236349;color:#fff;padding:12px 20px;border-radius:999px;text-decoration:none;font-weight:600'>Open discharge portal</a></p>
+            </div>""",
+            text=f"{clinic_name}: Discharge instructions. View at {portal_url}",
+        )
+    except EmailNotConfigured:
+        raise HTTPException(400, "Email is not connected for this clinic yet. Add your provider under Integrations → Email.")
+    except EmailSendFailed as e:
+        raise HTTPException(500, f"Email send failed: {e}")
+    return {"ok": True, "portal_url": portal_url}
 
 
 @api.get("/discharge/public/{token}")
@@ -990,6 +1056,11 @@ app.include_router(build_twilio_routes(
     create_task_fn=create_task,
     transcribe_audio_fn=transcribe_audio,
 ))
+app.include_router(build_credentials_routes(db, auth_dep))
+app.include_router(build_compliance_routes(db, auth_dep))
+app.include_router(build_invitation_routes(db, auth_dep, lambda: os.environ.get("PUBLIC_APP_URL", "")))
+app.include_router(build_public_invite_routes(db))
+app.include_router(build_billing_cycle_routes(db, auth_dep))
 
 app.add_middleware(
     CORSMiddleware,

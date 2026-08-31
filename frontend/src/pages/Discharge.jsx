@@ -14,8 +14,10 @@ export default function Discharge() {
   const [petName, setPetName] = useState("Bella");
   const [plan, setPlan] = useState("Continue mometamax topical in both ears once daily for 10 more days. Ear cleaner (Epi-Otic) twice weekly. Bathe with chlorhexidine shampoo weekly. Recheck in 3 weeks for repeat ear cytology. Continue Apoquel 16mg once daily.");
   const [language, setLanguage] = useState("English");
+  const [ownerEmail, setOwnerEmail] = useState("");
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const shareUrl = result?.share_token ? `${window.location.origin}/d/${result.share_token}` : null;
@@ -30,6 +32,21 @@ export default function Discharge() {
       toast.error("Generation failed.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function emailToOwner() {
+    if (!result?.share_token) return toast.info("Create a shareable link first.");
+    if (!ownerEmail) return toast.info("Enter the pet parent's email.");
+    setEmailBusy(true);
+    try {
+      await api.post("/discharge/email", { token: result.share_token, email_to: ownerEmail });
+      toast.success(`Emailed to ${ownerEmail}`);
+      setOwnerEmail("");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Send failed — connect email under Integrations.");
+    } finally {
+      setEmailBusy(false);
     }
   }
 
@@ -97,6 +114,20 @@ export default function Discharge() {
                 </a>
               </div>
               <div className="text-xs text-emerald-700 mt-2">Text or email this link to the owner. They'll see meds, warning signs and a one-tap recheck button — in {language}.</div>
+              <div className="mt-3 pt-3 border-t border-emerald-200 grid grid-cols-[1fr_auto] gap-2">
+                <Input
+                  type="email"
+                  value={ownerEmail}
+                  onChange={(e) => setOwnerEmail(e.target.value)}
+                  placeholder="owner@example.com"
+                  data-testid="disch-owner-email"
+                  className="bg-white h-9"
+                />
+                <Button onClick={emailToOwner} disabled={emailBusy || !ownerEmail} data-testid="disch-email-btn" size="sm" className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-full">
+                  {emailBusy ? "Sending…" : "Email to owner"}
+                </Button>
+              </div>
+              <div className="text-[11px] text-emerald-800/80 mt-2">Emails send from your clinic's own email provider (Resend or SendGrid). Not connected? Set it up in Integrations.</div>
             </Card>
           )}
 

@@ -38,6 +38,10 @@ import PublicReceptionist from "@/pages/PublicReceptionist";
 import ReceptionistSettings from "@/pages/ReceptionistSettings";
 import ScribeTemplates from "@/pages/ScribeTemplates";
 import PhoneSms from "@/pages/PhoneSms";
+import Integrations from "@/pages/Integrations";
+import SmsCompliance from "@/pages/SmsCompliance";
+import Team from "@/pages/Team";
+import InviteAccept from "@/pages/auth/InviteAccept";
 import "@/App.css";
 
 function AppRouter() {
@@ -57,6 +61,7 @@ function AppRouter() {
       <Route path="/how-it-works" element={<HowItWorks />} />
       <Route path="/roi" element={<ROI />} />
       <Route path="/try-it" element={<TryIt />} />
+      <Route path="/invite/:token" element={<InviteAccept />} />
       <Route path="/legal/terms" element={<Terms />} />
       <Route path="/legal/privacy" element={<Privacy />} />
 
@@ -83,6 +88,9 @@ function AppRouter() {
         <Route path="scribe" element={<AmbientScribe />} />
         <Route path="scribe/templates" element={<ScribeTemplates />} />
         <Route path="phone" element={<PhoneSms />} />
+        <Route path="integrations" element={<Integrations />} />
+        <Route path="compliance" element={<SmsCompliance />} />
+        <Route path="team" element={<Team />} />
         <Route path="patients" element={<Patients />} />
         <Route path="patients/:id" element={<PatientDetail />} />
         <Route path="inbox" element={<Inbox />} />
