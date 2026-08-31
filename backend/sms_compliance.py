@@ -161,6 +161,47 @@ async def has_active_consent(db: AsyncIOMotorDatabase, clinic_id: str, phone: st
     return bool(doc and doc.get("status") == "opted_in")
 
 
+def _in_quiet_hours(profile: dict, now: Optional[datetime] = None) -> bool:
+    """True if `now` falls inside the clinic's quiet-hours window in the clinic's TZ.
+    Also treats Sundays as a quiet day for marketing by default."""
+    start = (profile.get("quiet_hours_start") or "").strip()
+    end = (profile.get("quiet_hours_end") or "").strip()
+    tz_name = (profile.get("quiet_hours_tz") or "America/Los_Angeles").strip()
+    now = now or datetime.now(timezone.utc)
+    try:
+        try:
+            from zoneinfo import ZoneInfo
+            local = now.astimezone(ZoneInfo(tz_name))
+        except Exception:
+            local = now
+    except Exception:
+        local = now
+    # Sundays are always quiet for marketing (industry hygiene). We express this by returning
+    # True on Sunday whenever a quiet-hours window is configured at all.
+    if local.weekday() == 6 and (start or end):
+        return True
+    if not start or not end:
+        return False
+    def _parse(t: str):
+        try:
+            hh, mm = t.split(":")
+            return int(hh), int(mm)
+        except Exception:
+            return None
+    s = _parse(start); e = _parse(end)
+    if not s or not e:
+        return False
+    cur = local.hour * 60 + local.minute
+    smin = s[0] * 60 + s[1]
+    emin = e[0] * 60 + e[1]
+    if smin == emin:
+        return False
+    if smin < emin:
+        return smin <= cur < emin
+    # window crosses midnight
+    return cur >= smin or cur < emin
+
+
 def is_stop_message(body: str) -> bool:
     tokens = re.findall(r"[A-Za-z]+", (body or "").upper())
     if not tokens:
@@ -197,6 +238,9 @@ async def can_send_sms(db: AsyncIOMotorDatabase, clinic_id: str, phone: str,
         return False, "Twilio Messaging Service is not connected."
     if not await has_active_consent(db, clinic_id, phone, message_type):
         return False, f"Recipient has no active {message_type} consent."
+    # Marketing must respect quiet hours; care is not blocked by quiet hours (transactional).
+    if message_type == "marketing" and _in_quiet_hours(profile):
+        return False, "Marketing sends are paused during clinic quiet hours."
     return True, ""
 
 

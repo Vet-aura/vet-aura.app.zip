@@ -140,7 +140,7 @@ export default function Landing() {
           ))}
         </div>
         <div className="mt-6">
-          <Link to="/roi" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-800 hover:text-emerald-900" data-testid="landing-see-roi">See the full ROI breakdown <ArrowRight className="h-4 w-4" /></Link>
+          <Link to="/roi" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-800 hover:text-emerald-900" data-testid="landing-see-roi">Open the ROI calculator <ArrowRight className="h-4 w-4" /></Link>
         </div>
       </section>
 

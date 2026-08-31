@@ -1,4 +1,5 @@
 import MarketingShell from "@/components/MarketingShell";
+import RoiCalculator from "@/components/RoiCalculator";
 import { Card } from "@/components/ui/card";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -68,7 +69,7 @@ export default function ROI() {
       </section>
 
       {/* Big stat grid */}
-      <section className="max-w-6xl mx-auto px-6 pb-16">
+      <section className="max-w-6xl mx-auto px-6 pb-10">
         <div className="grid md:grid-cols-2 gap-4">
           {STATS.map((s) => (
             <Card key={s.big} className="p-6 rounded-2xl border-emerald-100 bg-white shadow-sm" data-testid={`roi-stat-${s.big.replace(/\W+/g,'').toLowerCase()}`}>
@@ -86,6 +87,11 @@ export default function ROI() {
             </Card>
           ))}
         </div>
+      </section>
+
+      {/* Interactive calculator */}
+      <section className="max-w-6xl mx-auto px-6 pb-16">
+        <RoiCalculator />
       </section>
 
       {/* Payback math */}

@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend-only testing of new interactive ROI calculator on /roi. All 15 test scenarios from the review request passed: calculator renders with data-testid roi-calculator; default inputs produce non-zero net ($33,681), ROI multiple format (49.9×), payback-days hint ('Payback in ~1 days'); DVMs slider to max (12) increases net to $100,977; Scribe toggle OFF decreases cost ($689→$499) and increases net ($33,681→$33,871); missed-calls slider up increases captured revenue ($10,164→$22,869); notes-baseline slider up increases DVM time recovered ($21,384→$33,264); Reset restores DVMs display to 3; both CTA buttons render with correct hrefs (/signup and /try-it); landing page link 'landing-see-roi' reads 'Open the ROI calculator' and points to /roi. No blocking console errors on /roi (only 2 unrelated 401s from resource fetches — likely favicon/analytics, not from the calculator).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Payback hint pluralization: shows 'Payback in ~1 days' — consider singular form when days === 1.",
+    "Note: The scribe cost formula multiplies by (1 - bundle_discount) only when attach_scribe is true; the condition is redundant since scribe_cost_raw is 0 otherwise — harmless but simplify to `scribe_cost = v.attach_scribe ? scribe_price_per_dvm * v.dvms * (1 - v.bundle_discount) : 0`.",
+    "Two 401 network errors observed on /roi (unrelated to calculator, likely from a background auth/me probe or an asset behind auth) — worth investigating to keep marketing pages fully anonymous-clean."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100%"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Radix Slider (shadcn) does NOT receive keyboard events when focusing the wrapper element carrying the data-testid. Must query the inner [role='slider'] thumb: `page.query_selector('[data-testid=\"roi-dvms\"] [role=\"slider\"]')` then focus + ArrowRight/End. Attach-scribe is a native checkbox — page.check/uncheck works directly on data-testid.",
+  "rca of the issue": "N/A — all features working as specified."
+}
