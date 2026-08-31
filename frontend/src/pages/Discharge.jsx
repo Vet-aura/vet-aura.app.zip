@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles, Pill, AlertTriangle, MessagesSquare } from "lucide-react";
+import { Sparkles, Pill, AlertTriangle, MessagesSquare, Share2, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 
 const LANGS = ["English", "Spanish", "French", "German", "Mandarin", "Portuguese"];
@@ -16,17 +16,32 @@ export default function Discharge() {
   const [language, setLanguage] = useState("English");
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  async function generate() {
+  const shareUrl = result?.share_token ? `${window.location.origin}/d/${result.share_token}` : null;
+
+  async function generate(share = false) {
     setBusy(true);
     try {
-      const { data } = await api.post("/ai/discharge", { pet_name: petName, plan_notes: plan, language });
+      const { data } = await api.post("/ai/discharge", { pet_name: petName, plan_notes: plan, language, share });
       setResult(data);
-      toast.success("Discharge draft ready — review before sending to owner.");
+      toast.success(share ? "Discharge ready — shareable link created." : "Discharge draft ready.");
     } catch {
       toast.error("Generation failed.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function copyLink() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      toast.success("Link copied — text or email it to the owner.");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Copy failed.");
     }
   }
 
@@ -56,12 +71,35 @@ export default function Discharge() {
             <div className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold mb-1">Clinician-approved plan</div>
             <Textarea value={plan} onChange={(e) => setPlan(e.target.value)} rows={9} data-testid="disch-plan" />
           </div>
-          <Button onClick={generate} disabled={busy} data-testid="disch-generate" className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-full w-full">
-            <Sparkles className="h-4 w-4 mr-2" /> {busy ? "Drafting…" : "Generate discharge"}
-          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button onClick={() => generate(false)} disabled={busy} data-testid="disch-generate" variant="outline" className="rounded-full border-emerald-300 text-emerald-800 hover:bg-emerald-50">
+              <Sparkles className="h-4 w-4 mr-2" /> Draft
+            </Button>
+            <Button onClick={() => generate(true)} disabled={busy} data-testid="disch-share" className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-full">
+              <Share2 className="h-4 w-4 mr-2" /> Draft & share
+            </Button>
+          </div>
         </Card>
 
         <div className="lg:col-span-7 space-y-3">
+          {shareUrl && (
+            <Card className="p-4 rounded-2xl border-emerald-300 bg-emerald-50/50" data-testid="disch-share-card">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-emerald-800 mb-2">
+                <Share2 className="h-3 w-3" /> Owner portal link (clinic-branded, mobile-friendly)
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="font-mono-clinical text-sm text-emerald-900 flex-1 min-w-0 truncate p-2 bg-white rounded-lg border border-emerald-100">{shareUrl}</div>
+                <Button onClick={copyLink} variant="outline" size="sm" data-testid="disch-copy" className="border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-full">
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+                <a href={shareUrl} target="_blank" rel="noreferrer" data-testid="disch-open">
+                  <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-full">Preview</Button>
+                </a>
+              </div>
+              <div className="text-xs text-emerald-700 mt-2">Text or email this link to the owner. They'll see meds, warning signs and a one-tap recheck button — in {language}.</div>
+            </Card>
+          )}
+
           {result ? (
             <Card className="p-6 rounded-2xl border-emerald-100 bg-white shadow-sm space-y-4">
               {result.greeting && <div className="text-slate-800">{result.greeting}</div>}
@@ -71,7 +109,6 @@ export default function Discharge() {
                   <div className="text-sm text-slate-700 leading-relaxed">{result.summary}</div>
                 </div>
               )}
-
               {(result.medications || []).length > 0 && (
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-emerald-700 font-semibold mb-2 flex items-center gap-1"><Pill className="h-3 w-3" /> Medications</div>
@@ -86,7 +123,6 @@ export default function Discharge() {
                   </div>
                 </div>
               )}
-
               {(result.home_care || []).length > 0 && (
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-emerald-700 font-semibold mb-2">Home care</div>
@@ -95,7 +131,6 @@ export default function Discharge() {
                   </ul>
                 </div>
               )}
-
               {(result.warning_signs || []).length > 0 && (
                 <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
                   <div className="text-[10px] uppercase tracking-widest text-amber-800 font-semibold mb-2 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Call the clinic immediately if…</div>
@@ -104,7 +139,6 @@ export default function Discharge() {
                   </ul>
                 </div>
               )}
-
               {result.recheck && (
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-emerald-700 font-semibold mb-1">Recheck</div>
@@ -115,7 +149,7 @@ export default function Discharge() {
             </Card>
           ) : (
             <Card className="p-10 rounded-2xl border-emerald-100 bg-white text-center text-slate-500">
-              <MessagesSquare className="h-8 w-8 text-slate-300 mx-auto mb-2" /> Draft plan on the left → generate discharge.
+              <MessagesSquare className="h-8 w-8 text-slate-300 mx-auto mb-2" /> Draft plan on the left → generate discharge or share.
             </Card>
           )}
         </div>

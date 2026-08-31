@@ -1,0 +1,254 @@
+"""Combined auth: Emergent Google OAuth + email/password JWT. Multi-tenant clinic scoping."""
+import os
+import uuid
+import bcrypt
+import jwt
+import httpx
+from datetime import datetime, timezone, timedelta
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel, EmailStr, Field
+from motor.motor_asyncio import AsyncIOMotorDatabase
+
+JWT_SECRET = os.environ.get("JWT_SECRET", "change-me")
+JWT_ALG = "HS256"
+JWT_EXPIRES_DAYS = 7
+
+auth_router = APIRouter(prefix="/api/auth")
+
+
+# ---------- Models ----------
+class SignupReq(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8)
+    name: str = Field(min_length=1)
+    clinic_name: str = Field(min_length=1)
+
+
+class LoginReq(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class SessionExchangeReq(BaseModel):
+    session_id: str
+    clinic_name: str | None = None  # provided only on first sign-in
+
+
+class UserOut(BaseModel):
+    user_id: str
+    clinic_id: str
+    email: str
+    name: str
+    role: str
+    picture: str | None = None
+    clinic: dict | None = None
+
+
+# ---------- Helpers ----------
+def _hash(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
+
+
+def _verify(pw: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode(), hashed.encode())
+    except Exception:
+        return False
+
+
+def _issue_jwt(user_id: str) -> str:
+    payload = {
+        "sub": user_id,
+        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(timezone.utc) + timedelta(days=JWT_EXPIRES_DAYS),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
+
+
+def _decode_jwt(token: str) -> str | None:
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        return payload.get("sub")
+    except Exception:
+        return None
+
+
+async def _seed_clinic(db: AsyncIOMotorDatabase, clinic_id: str):
+    """Seed a fresh clinic with demo veterinary data so users can explore immediately."""
+    from seed_data import build_seed
+    seed = build_seed(clinic_id=clinic_id)
+    for coll in ("owners", "patients", "visits", "labs", "weights", "appointments", "messages"):
+        if seed.get(coll):
+            await db[coll].insert_many(seed[coll])
+
+
+async def _create_clinic(db: AsyncIOMotorDatabase, name: str, owner_email: str) -> dict:
+    clinic = {
+        "clinic_id": f"clinic_{uuid.uuid4().hex[:12]}",
+        "name": name,
+        "primary_color": "#236349",
+        "logo_url": None,
+        "discharge_footer": None,
+        "plan": "trial",
+        "plan_status": "trialing",
+        "trial_ends_at": (datetime.now(timezone.utc) + timedelta(days=14)).isoformat(),
+        "stripe_customer_id": None,
+        "stripe_subscription_id": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "owner_email": owner_email,
+        "onboarded": False,
+    }
+    await db.clinics.insert_one(clinic)
+    clinic.pop("_id", None)
+    await _seed_clinic(db, clinic["clinic_id"])
+    return clinic
+
+
+async def _current_user(request: Request, db: AsyncIOMotorDatabase) -> dict:
+    """Extract auth from cookie (session_token) or Authorization header (session_token OR JWT)."""
+    token = request.cookies.get("session_token")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.lower().startswith("bearer "):
+            token = auth.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
+
+    user_id = None
+    # try JWT first
+    user_id = _decode_jwt(token)
+    if not user_id:
+        # try session_token (from Google flow)
+        sess = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+        if sess:
+            exp = sess.get("expires_at")
+            if isinstance(exp, str):
+                try:
+                    exp = datetime.fromisoformat(exp)
+                except Exception:
+                    exp = None
+            if exp and exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if exp and exp < datetime.now(timezone.utc):
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session expired")
+            user_id = sess.get("user_id")
+    if not user_id:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid session")
+
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found")
+    return user
+
+
+def make_auth_dep(db: AsyncIOMotorDatabase):
+    async def dep(request: Request) -> dict:
+        return await _current_user(request, db)
+    return dep
+
+
+# ---------- Routes ----------
+def build_auth_routes(db: AsyncIOMotorDatabase):
+    @auth_router.post("/signup")
+    async def signup(req: SignupReq, response: Response):
+        if await db.users.find_one({"email": req.email.lower()}):
+            raise HTTPException(400, "Email already registered")
+        clinic = await _create_clinic(db, req.clinic_name, req.email.lower())
+        user = {
+            "user_id": f"user_{uuid.uuid4().hex[:12]}",
+            "clinic_id": clinic["clinic_id"],
+            "email": req.email.lower(),
+            "name": req.name,
+            "role": "owner",
+            "picture": None,
+            "password_hash": _hash(req.password),
+            "auth_method": "password",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.users.insert_one(user)
+        user.pop("_id", None)
+        token = _issue_jwt(user["user_id"])
+        return {"token": token, "user": {**{k: user[k] for k in ("user_id", "clinic_id", "email", "name", "role", "picture")}, "clinic": clinic}}
+
+    @auth_router.post("/login")
+    async def login(req: LoginReq):
+        user = await db.users.find_one({"email": req.email.lower()}, {"_id": 0})
+        if not user or not user.get("password_hash") or not _verify(req.password, user["password_hash"]):
+            raise HTTPException(401, "Invalid credentials")
+        clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
+        token = _issue_jwt(user["user_id"])
+        return {"token": token, "user": {**{k: user.get(k) for k in ("user_id", "clinic_id", "email", "name", "role", "picture")}, "clinic": clinic}}
+
+    @auth_router.post("/session")
+    async def google_session(req: SessionExchangeReq, response: Response):
+        """Exchange Emergent Google session_id for our session_token."""
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                r = await client.get(
+                    "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                    headers={"X-Session-ID": req.session_id},
+                )
+                r.raise_for_status()
+                data = r.json()
+        except Exception:
+            raise HTTPException(401, "Invalid session_id")
+
+        email = (data.get("email") or "").lower()
+        name = data.get("name") or email.split("@")[0]
+        picture = data.get("picture")
+        session_token = data.get("session_token")
+        if not email or not session_token:
+            raise HTTPException(401, "Incomplete session data")
+
+        user = await db.users.find_one({"email": email}, {"_id": 0})
+        if not user:
+            # Create clinic + user
+            clinic_name = req.clinic_name or f"{name}'s Clinic"
+            clinic = await _create_clinic(db, clinic_name, email)
+            user = {
+                "user_id": f"user_{uuid.uuid4().hex[:12]}",
+                "clinic_id": clinic["clinic_id"],
+                "email": email,
+                "name": name,
+                "role": "owner",
+                "picture": picture,
+                "auth_method": "google",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.users.insert_one(user)
+            user.pop("_id", None)
+        else:
+            # Update picture on re-sign-in
+            await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"picture": picture, "name": name}})
+            clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
+
+        # Store session_token
+        await db.user_sessions.insert_one({
+            "user_id": user["user_id"],
+            "session_token": session_token,
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        # Also set httpOnly cookie
+        response.set_cookie(
+            "session_token", session_token,
+            httponly=True, secure=True, samesite="none",
+            path="/", max_age=7 * 24 * 60 * 60,
+        )
+        return {"token": session_token, "user": {**{k: user.get(k) for k in ("user_id", "clinic_id", "email", "name", "role", "picture")}, "clinic": clinic}}
+
+    @auth_router.get("/me")
+    async def me(request: Request):
+        user = await _current_user(request, db)
+        clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
+        return {"user_id": user["user_id"], "clinic_id": user["clinic_id"], "email": user["email"], "name": user["name"], "role": user.get("role", "owner"), "picture": user.get("picture"), "clinic": clinic}
+
+    @auth_router.post("/logout")
+    async def logout(request: Request, response: Response):
+        token = request.cookies.get("session_token") or (request.headers.get("Authorization", "").replace("Bearer ", "").strip() or None)
+        if token:
+            await db.user_sessions.delete_one({"session_token": token})
+        response.delete_cookie("session_token", path="/")
+        return {"ok": True}
+
+    return auth_router

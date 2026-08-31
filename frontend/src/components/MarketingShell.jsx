@@ -1,0 +1,79 @@
+import { Link, NavLink } from "react-router-dom";
+import { PawPrint } from "lucide-react";
+
+export default function MarketingShell({ children }) {
+  return (
+    <div className="min-h-screen bg-[#f8f9f6] text-slate-800 flex flex-col">
+      <header className="border-b border-emerald-100 bg-white/70 backdrop-blur sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2" data-testid="marketing-brand">
+            <div className="h-10 w-10 rounded-xl bg-emerald-700 grid place-items-center text-white shadow-sm">
+              <PawPrint className="h-5 w-5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-serif-display text-xl font-semibold text-emerald-900 leading-none">Vetaura</span>
+              <span className="text-[10px] uppercase tracking-widest text-emerald-700/70 mt-0.5">Clinical AI Copilot</span>
+            </div>
+          </Link>
+          <nav className="hidden md:flex items-center gap-1">
+            {[
+              { to: "/features", label: "Features", tid: "nav-features" },
+              { to: "/pricing", label: "Pricing", tid: "nav-pricing" },
+              { to: "/faq", label: "FAQ", tid: "nav-faq" },
+              { to: "/demo", label: "Book a demo", tid: "nav-demo" },
+            ].map((n) => (
+              <NavLink
+                key={n.to}
+                to={n.to}
+                data-testid={n.tid}
+                className={({ isActive }) => `px-3 py-2 text-sm font-medium rounded-lg transition-all ${isActive ? "text-emerald-900 bg-emerald-50" : "text-slate-600 hover:text-emerald-900 hover:bg-emerald-50/60"}`}
+              >
+                {n.label}
+              </NavLink>
+            ))}
+          </nav>
+          <div className="flex items-center gap-2">
+            <Link to="/login" className="hidden sm:block text-sm font-semibold text-emerald-800 hover:text-emerald-900 px-3 py-2" data-testid="marketing-signin">Sign in</Link>
+            <Link to="/signup" className="inline-flex items-center px-4 h-10 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold" data-testid="marketing-start-trial">Start free trial</Link>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1">{children}</main>
+
+      <footer className="border-t border-emerald-100 bg-white/60">
+        <div className="max-w-7xl mx-auto px-6 py-10 grid sm:grid-cols-4 gap-6 text-sm">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-8 w-8 rounded-lg bg-emerald-700 grid place-items-center text-white"><PawPrint className="h-4 w-4" /></div>
+              <span className="font-serif-display text-lg font-semibold text-emerald-900">Vetaura</span>
+            </div>
+            <p className="text-slate-500 text-xs leading-relaxed">Vet-in-the-loop AI for busy veterinary practices.</p>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-3">Product</div>
+            <ul className="space-y-1.5 text-slate-700">
+              <li><Link to="/features" className="hover:text-emerald-800">Features</Link></li>
+              <li><Link to="/pricing" className="hover:text-emerald-800">Pricing</Link></li>
+              <li><Link to="/faq" className="hover:text-emerald-800">FAQ</Link></li>
+            </ul>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-3">Company</div>
+            <ul className="space-y-1.5 text-slate-700">
+              <li><Link to="/demo" className="hover:text-emerald-800">Book a demo</Link></li>
+              <li><a href="mailto:hello@vetaura.ai" className="hover:text-emerald-800">Contact</a></li>
+            </ul>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-3">Powered by</div>
+            <div className="text-slate-500 text-xs font-mono-clinical">Claude Sonnet 5<br />OpenAI Whisper</div>
+          </div>
+        </div>
+        <div className="border-t border-emerald-100 py-4 text-center text-xs text-slate-400">
+          © {new Date().getFullYear()} Vetaura · Drafts only — clinician review required.
+        </div>
+      </footer>
+    </div>
+  );
+}
