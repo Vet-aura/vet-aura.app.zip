@@ -18,30 +18,39 @@ SMP_COUNTRIES = {"AU","AT","BE","BG","CA","HR","CY","CZ","DK","EE","FI","FR","DE
 
 CATALOG = [
     {
-        "emergent_product_id": "vetaura_solo",
-        "name": "Vetaura Solo",
-        "description": "For solo vets and mobile practices.",
+        "emergent_product_id": "vetaura_starter",
+        "name": "Vetaura Starter",
+        "description": "For solo or small clinics.",
         "tax_code": "txcd_10103001",
         "prices": [
-            {"lookup_key": "vetaura_solo_monthly", "amount": 4900, "currency": "usd", "interval": "month", "trial_period_days": 14},
+            {"lookup_key": "vetaura_starter_monthly", "amount": 19900, "currency": "usd", "interval": "month", "trial_period_days": 14},
         ],
     },
     {
-        "emergent_product_id": "vetaura_clinic",
-        "name": "Vetaura Clinic",
-        "description": "For small-to-medium clinics with up to 8 staff.",
+        "emergent_product_id": "vetaura_growth",
+        "name": "Vetaura Growth",
+        "description": "For the typical 2–5 doctor clinic.",
         "tax_code": "txcd_10103001",
         "prices": [
-            {"lookup_key": "vetaura_clinic_monthly", "amount": 19900, "currency": "usd", "interval": "month", "trial_period_days": 14},
+            {"lookup_key": "vetaura_growth_monthly", "amount": 39900, "currency": "usd", "interval": "month", "trial_period_days": 14},
         ],
     },
     {
-        "emergent_product_id": "vetaura_multisite",
-        "name": "Vetaura Multi-site",
-        "description": "For hospital groups and multi-location practices.",
+        "emergent_product_id": "vetaura_pro",
+        "name": "Vetaura Pro",
+        "description": "For busy clinics that need phone coverage.",
         "tax_code": "txcd_10103001",
         "prices": [
-            {"lookup_key": "vetaura_multisite_monthly", "amount": 49900, "currency": "usd", "interval": "month", "trial_period_days": 14},
+            {"lookup_key": "vetaura_pro_monthly", "amount": 69900, "currency": "usd", "interval": "month", "trial_period_days": 14},
+        ],
+    },
+    {
+        "emergent_product_id": "vetaura_scribe_addon",
+        "name": "Vetaura Scribe (per DVM add-on)",
+        "description": "Ambient SOAP scribe — per veterinarian.",
+        "tax_code": "txcd_10103001",
+        "prices": [
+            {"lookup_key": "vetaura_scribe_addon_monthly", "amount": 9900, "currency": "usd", "interval": "month", "trial_period_days": 14},
         ],
     },
 ]

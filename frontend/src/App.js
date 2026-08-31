@@ -26,11 +26,15 @@ import Schedule from "@/pages/Schedule";
 import Differentials from "@/pages/Differentials";
 import Discharge from "@/pages/Discharge";
 import Handoff from "@/pages/Handoff";
+import Tasks from "@/pages/Tasks";
+import CareGaps from "@/pages/CareGaps";
 import Billing from "@/pages/Billing";
 import Settings from "@/pages/Settings";
 import AuditLog from "@/pages/AuditLog";
 import OwnerPortal from "@/pages/OwnerPortal";
 import PaymentResult from "@/pages/PaymentResult";
+import PublicReceptionist from "@/pages/PublicReceptionist";
+import ReceptionistSettings from "@/pages/ReceptionistSettings";
 import "@/App.css";
 
 function AppRouter() {
@@ -63,6 +67,8 @@ function AppRouter() {
 
       {/* Public owner portal */}
       <Route path="/d/:token" element={<OwnerPortal />} />
+      {/* Public AI Vet Receptionist chat */}
+      <Route path="/r/:clinicId" element={<PublicReceptionist />} />
 
       {/* Onboarding (auth required, but no "onboarded" gate) */}
       <Route path="/onboarding" element={<ProtectedRoute requireOnboarded={false}><Onboarding /></ProtectedRoute>} />
@@ -74,12 +80,15 @@ function AppRouter() {
         <Route path="patients" element={<Patients />} />
         <Route path="patients/:id" element={<PatientDetail />} />
         <Route path="inbox" element={<Inbox />} />
+        <Route path="tasks" element={<Tasks />} />
+        <Route path="care-gaps" element={<CareGaps />} />
         <Route path="schedule" element={<Schedule />} />
         <Route path="differentials" element={<Differentials />} />
         <Route path="discharge" element={<Discharge />} />
         <Route path="handoff" element={<Handoff />} />
         <Route path="billing" element={<Billing />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="receptionist" element={<ReceptionistSettings />} />
         <Route path="audit" element={<AuditLog />} />
       </Route>
 

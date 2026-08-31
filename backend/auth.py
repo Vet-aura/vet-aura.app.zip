@@ -77,7 +77,7 @@ async def _seed_clinic(db: AsyncIOMotorDatabase, clinic_id: str):
     """Seed a fresh clinic with demo veterinary data so users can explore immediately."""
     from seed_data import build_seed
     seed = build_seed(clinic_id=clinic_id)
-    for coll in ("owners", "patients", "visits", "labs", "weights", "appointments", "messages"):
+    for coll in ("owners", "patients", "visits", "labs", "weights", "appointments", "messages", "tasks"):
         if seed.get(coll):
             await db[coll].insert_many(seed[coll])
 

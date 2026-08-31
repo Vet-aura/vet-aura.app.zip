@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mic, ArrowRight, AlertTriangle, PawPrint, Clock, MessagesSquare } from "lucide-react";
+import { Mic, ArrowRight, AlertTriangle, PawPrint, Clock, MessagesSquare, ListTodo, TrendingUp } from "lucide-react";
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
@@ -43,18 +43,20 @@ export default function Dashboard() {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Patients", value: stats?.patients ?? "—", tid: "kpi-patients", icon: PawPrint },
-          { label: "Appointments today", value: stats?.appointments_today ?? "—", tid: "kpi-appts", icon: Clock },
-          { label: "Open messages", value: stats?.open_messages ?? "—", tid: "kpi-messages", icon: MessagesSquare },
-          { label: "Draft notes", value: stats?.draft_notes ?? 0, tid: "kpi-drafts", icon: Mic },
+          { label: "Open messages", value: stats?.open_messages ?? "—", tid: "kpi-messages", icon: MessagesSquare, to: "/app/inbox" },
+          { label: "Open follow-ups", value: stats?.open_tasks ?? "—", tid: "kpi-tasks", icon: ListTodo, to: "/app/tasks" },
+          { label: "Patients", value: stats?.patients ?? "—", tid: "kpi-patients", icon: PawPrint, to: "/app/patients" },
+          { label: "Draft notes", value: stats?.draft_notes ?? 0, tid: "kpi-drafts", icon: Mic, to: "/app/scribe" },
         ].map((k) => (
-          <Card key={k.label} className="p-5 border-emerald-100 shadow-sm bg-white rounded-2xl" data-testid={k.tid}>
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] uppercase tracking-widest text-slate-500 font-semibold">{k.label}</div>
-              <k.icon className="h-4 w-4 text-emerald-700" />
-            </div>
-            <div className="mt-2 font-serif-display text-3xl text-emerald-950">{k.value}</div>
-          </Card>
+          <Link key={k.label} to={k.to}>
+            <Card className="p-5 border-emerald-100 shadow-sm bg-white rounded-2xl hover:border-emerald-300 hover:shadow-md transition-all cursor-pointer" data-testid={k.tid}>
+              <div className="flex items-center justify-between">
+                <div className="text-[11px] uppercase tracking-widest text-slate-500 font-semibold">{k.label}</div>
+                <k.icon className="h-4 w-4 text-emerald-700" />
+              </div>
+              <div className="mt-2 font-serif-display text-3xl text-emerald-950">{k.value}</div>
+            </Card>
+          </Link>
         ))}
       </div>
 

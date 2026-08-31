@@ -1,21 +1,24 @@
 import { NavLink, Outlet, useNavigate, Link } from "react-router-dom";
-import { LayoutDashboard, Mic, PawPrint, Inbox, CalendarDays, ClipboardList, Stethoscope, MessagesSquare, CreditCard, Settings as SettingsIcon, Activity, LogOut, Sparkles } from "lucide-react";
+import { LayoutDashboard, Mic, PawPrint, Inbox, CalendarDays, ClipboardList, Stethoscope, MessagesSquare, CreditCard, Settings as SettingsIcon, Activity, LogOut, Sparkles, ListTodo, TrendingUp, PhoneCall } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthProvider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const PRIMARY_NAV = [
   { to: "/app", icon: LayoutDashboard, label: "Dashboard", end: true, tid: "nav-dashboard" },
+  { to: "/app/inbox", icon: Inbox, label: "Client Inbox", tid: "nav-inbox" },
+  { to: "/app/tasks", icon: ListTodo, label: "Follow-ups", tid: "nav-tasks" },
+  { to: "/app/care-gaps", icon: TrendingUp, label: "Care Gaps", tid: "nav-care-gaps" },
   { to: "/app/scribe", icon: Mic, label: "Ambient Scribe", tid: "nav-scribe" },
   { to: "/app/patients", icon: PawPrint, label: "Patients", tid: "nav-patients" },
   { to: "/app/schedule", icon: CalendarDays, label: "Schedule", tid: "nav-schedule" },
-  { to: "/app/inbox", icon: Inbox, label: "Client Inbox", tid: "nav-inbox" },
   { to: "/app/differentials", icon: ClipboardList, label: "Differentials", tid: "nav-differentials" },
   { to: "/app/discharge", icon: MessagesSquare, label: "Discharge", tid: "nav-discharge" },
   { to: "/app/handoff", icon: Stethoscope, label: "Shift Handoff", tid: "nav-handoff" },
 ];
 
 const SECONDARY_NAV = [
+  { to: "/app/receptionist", icon: PhoneCall, label: "AI Receptionist", tid: "nav-receptionist" },
   { to: "/app/billing", icon: CreditCard, label: "Billing", tid: "nav-billing" },
   { to: "/app/settings", icon: SettingsIcon, label: "Settings", tid: "nav-settings" },
   { to: "/app/audit", icon: Activity, label: "Audit Log", tid: "nav-audit" },

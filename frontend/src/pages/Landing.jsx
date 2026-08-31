@@ -24,10 +24,10 @@ export default function Landing() {
             <Sparkles className="h-3.5 w-3.5" /> 14-day free trial · no card required
           </div>
           <h1 className="mt-5 font-serif-display text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-emerald-950 leading-[1.05]">
-            Give every appointment back to the animal in the room.
+            The clinic copilot that makes sure nothing falls through the cracks.
           </h1>
           <p className="mt-5 text-base sm:text-lg text-slate-600 max-w-xl leading-relaxed">
-            Vetaura listens through the visit, drafts your SOAP note, suggests differentials, writes the owner's discharge in plain language, and hands off the shift — while you keep both hands on the patient.
+            Vetaura classifies every client message, drafts staff-reviewed replies, auto-generates every post-op and follow-up task, and surfaces the patients overdue for vaccines, dental and monitoring — plus an ambient SOAP scribe and multilingual owner discharges. All vet-in-the-loop.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link to="/signup" data-testid="landing-cta-signup">
@@ -40,11 +40,11 @@ export default function Landing() {
             </Link>
           </div>
           <div className="mt-10 flex items-center gap-6 text-xs text-slate-500">
-            <div><span className="font-mono-clinical text-emerald-800 text-base font-semibold">~2 min</span><br />avg. note draft</div>
+            <div><span className="font-mono-clinical text-emerald-800 text-base font-semibold">7 buckets</span><br />message classification</div>
             <div className="h-8 w-px bg-emerald-100" />
-            <div><span className="font-mono-clinical text-emerald-800 text-base font-semibold">S / O / A / P</span><br />structured &amp; editable</div>
+            <div><span className="font-mono-clinical text-emerald-800 text-base font-semibold">Auto tasks</span><br />post-op, monitoring, gaps</div>
             <div className="h-8 w-px bg-emerald-100" />
-            <div><span className="font-mono-clinical text-emerald-800 text-base font-semibold">6 languages</span><br />owner instructions</div>
+            <div><span className="font-mono-clinical text-emerald-800 text-base font-semibold">6 languages</span><br />owner discharge portal</div>
           </div>
         </div>
 
@@ -117,7 +117,7 @@ export default function Landing() {
         <div className="max-w-2xl">
           <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold">The numbers</div>
           <h2 className="mt-2 font-serif-display text-3xl sm:text-4xl font-semibold text-emerald-950 tracking-tight">Time back. Money back. Better care.</h2>
-          <p className="mt-3 text-slate-600">A single Clinic-plan practice with 3 DVMs recovers &gt;$16,000 in reclaimed clinical hours in month one — for less than a single VA hire.</p>
+          <p className="mt-3 text-slate-600">A 3-DVM Growth-plan clinic recovers roughly $16,000 in reclaimed clinical hours in month one — for less than the cost of an extra front-desk hire.</p>
         </div>
 
         <div className="mt-10 grid md:grid-cols-4 gap-4">

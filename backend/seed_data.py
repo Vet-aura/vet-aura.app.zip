@@ -73,13 +73,20 @@ def build_seed(clinic_id: str = "demo"):
         })
 
     messages = [
-        {"id": _id(), "clinic_id": clinic_id, "owner_id": owners[0]["id"], "patient_id": patients[0]["id"], "received_at": _iso(NOW - timedelta(hours=2)), "channel": "Portal", "subject": "Bella scratching her ears again", "body": "Hi, Bella has been shaking her head and scratching her right ear a lot since yesterday. She finished the last course of drops two weeks ago. Should I bring her in?", "status": "new", "draft": None},
-        {"id": _id(), "clinic_id": clinic_id, "owner_id": owners[3]["id"], "patient_id": patients[3]["id"], "received_at": _iso(NOW - timedelta(hours=5)), "channel": "SMS", "subject": "Ollie licking incision", "body": "Ollie keeps trying to lick his TPLO incision even with the cone on. It looks slightly pink around the edges but no discharge. Is this normal at day 10?", "status": "new", "draft": None},
-        {"id": _id(), "clinic_id": clinic_id, "owner_id": owners[1]["id"], "patient_id": patients[1]["id"], "received_at": _iso(NOW - timedelta(hours=8)), "channel": "Email", "subject": "Refill request — benazepril", "body": "Hello, we're almost out of Milo's benazepril (2.5mg once daily). Could you refill it? Thanks!", "status": "new", "draft": None},
-        {"id": _id(), "clinic_id": clinic_id, "owner_id": owners[2]["id"], "patient_id": patients[2]["id"], "received_at": _iso(NOW - timedelta(days=1)), "channel": "Portal", "subject": "Luna's limp", "body": "Luna's limp comes and goes. She was running at the park yesterday and then held her leg up for about a minute. She seems fine now. What should we do?", "status": "new", "draft": None},
+        {"id": _id(), "clinic_id": clinic_id, "owner_id": owners[0]["id"], "patient_id": patients[0]["id"], "received_at": _iso(NOW - timedelta(hours=2)), "channel": "Portal", "subject": "Bella scratching her ears again", "body": "Hi, Bella has been shaking her head and scratching her right ear a lot since yesterday. She finished the last course of drops two weeks ago. Should I bring her in?", "status": "new", "category": "appointment_needed", "draft": None},
+        {"id": _id(), "clinic_id": clinic_id, "owner_id": owners[3]["id"], "patient_id": patients[3]["id"], "received_at": _iso(NOW - timedelta(hours=5)), "channel": "SMS", "subject": "Ollie licking incision", "body": "Ollie keeps trying to lick his TPLO incision even with the cone on. It looks slightly pink around the edges but no discharge. Is this normal at day 10?", "status": "new", "category": "medication_question", "draft": None},
+        {"id": _id(), "clinic_id": clinic_id, "owner_id": owners[1]["id"], "patient_id": patients[1]["id"], "received_at": _iso(NOW - timedelta(hours=8)), "channel": "Email", "subject": "Refill request — benazepril", "body": "Hello, we're almost out of Milo's benazepril (2.5mg once daily). Could you refill it? Thanks!", "status": "new", "category": "refill_request", "draft": None},
+        {"id": _id(), "clinic_id": clinic_id, "owner_id": owners[2]["id"], "patient_id": patients[2]["id"], "received_at": _iso(NOW - timedelta(days=1)), "channel": "Portal", "subject": "Luna's limp", "body": "Luna's limp comes and goes. She was running at the park yesterday and then held her leg up for about a minute. She seems fine now. What should we do?", "status": "new", "category": "appointment_needed", "draft": None},
+    ]
+
+    tasks = [
+        {"id": _id(), "clinic_id": clinic_id, "patient_id": patients[3]["id"], "title": f"Post-op check-in call — {patients[3]['name']}", "description": "Confirm suture removal readiness; verify weight-bearing and controlled activity.", "priority": "high", "status": "open", "source": "auto_postop", "source_id": f"postop_{patients[3]['id']}", "created_at": _iso(NOW - timedelta(days=1)), "due_date": _iso(NOW + timedelta(days=1)), "completed_at": None},
+        {"id": _id(), "clinic_id": clinic_id, "patient_id": patients[1]["id"], "title": f"Monitoring due — {patients[1]['name']} (Chronic kidney disease (IRIS Stage 2))", "description": "Renal panel + urinalysis, blood pressure recheck.", "priority": "normal", "status": "open", "source": "auto_chronic", "source_id": f"chronic_{patients[1]['id']}_Chronic kidn", "created_at": _iso(NOW - timedelta(hours=6)), "due_date": _iso(NOW + timedelta(days=5)), "completed_at": None},
+        {"id": _id(), "clinic_id": clinic_id, "patient_id": patients[0]["id"], "title": f"Care gap — {patients[0]['name']}", "description": "Overdue: Rabies booster", "priority": "normal", "status": "open", "source": "auto_alert", "source_id": f"alert_{patients[0]['id']}_Overdue: Rab", "created_at": _iso(NOW - timedelta(hours=12)), "due_date": _iso(NOW + timedelta(days=3)), "completed_at": None},
     ]
 
     return {
         "owners": owners, "patients": patients, "visits": visits,
-        "labs": labs, "weights": weights, "appointments": appointments, "messages": messages,
+        "labs": labs, "weights": weights, "appointments": appointments,
+        "messages": messages, "tasks": tasks,
     }

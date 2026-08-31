@@ -1,20 +1,23 @@
 import { useEffect, useState } from "react";
-import { api, API } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthProvider";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, Sparkles, Check, Loader2 } from "lucide-react";
+import { CreditCard, Sparkles, Check, Loader2, Mic } from "lucide-react";
 import { toast } from "sonner";
 
 const HIGHLIGHTS = {
-  vetaura_solo_monthly: ["1 clinician seat", "Unlimited ambient scribe", "Differentials + discharge + inbox"],
-  vetaura_clinic_monthly: ["Up to 8 staff seats", "Shift handoffs", "Clinic branding"],
-  vetaura_multisite_monthly: ["Unlimited seats & locations", "Per-site branding", "SSO & advanced audit log"],
+  vetaura_starter_monthly: ["Inbox + follow-ups", "2 staff seats", "Fair-use AI allowance"],
+  vetaura_growth_monthly: ["Everything in Starter", "Unlimited staff", "Basic SOAP & discharge drafts", "Multilingual owner portal"],
+  vetaura_pro_monthly: ["Everything in Growth", "AI Vet Receptionist", "1,000 voice min / mo", "Priority support"],
+  vetaura_scribe_addon_monthly: ["Unlimited ambient SOAP scribing", "Per veterinarian add-on", "Species-specific vocab"],
 };
 
+const SCRIBE_KEY = "vetaura_scribe_addon_monthly";
+
 export default function Billing() {
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
   const [plans, setPlans] = useState([]);
   const [busy, setBusy] = useState(null);
 
@@ -30,7 +33,7 @@ export default function Billing() {
         origin_url: window.location.origin,
       });
       window.location.href = data.checkout_url;
-    } catch (e) {
+    } catch {
       toast.error("Could not open checkout.");
       setBusy(null);
     }
@@ -46,7 +49,12 @@ export default function Billing() {
   }
 
   const clinic = user?.clinic || {};
-  const trialLeft = clinic.trial_ends_at ? Math.max(0, Math.ceil((new Date(clinic.trial_ends_at) - new Date()) / (86400000))) : 0;
+  const trialLeft = clinic.trial_ends_at
+    ? Math.max(0, Math.ceil((new Date(clinic.trial_ends_at) - new Date()) / 86400000))
+    : 0;
+
+  const corePlans = plans.filter((p) => p.lookup_key !== SCRIBE_KEY);
+  const scribe = plans.find((p) => p.lookup_key === SCRIBE_KEY);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6">
@@ -61,7 +69,7 @@ export default function Billing() {
             <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold">Current plan</div>
             <div className="mt-1 flex items-center gap-2 flex-wrap">
               <div className="font-serif-display text-2xl font-semibold text-emerald-950 capitalize">Vetaura {clinic.plan}</div>
-              <Badge variant="outline" className={`border-emerald-200 text-emerald-800 bg-emerald-50 capitalize`}>{clinic.plan_status || "trialing"}</Badge>
+              <Badge variant="outline" className="border-emerald-200 text-emerald-800 bg-emerald-50 capitalize">{clinic.plan_status || "trialing"}</Badge>
               {clinic.plan_status === "trialing" && trialLeft > 0 && (
                 <Badge variant="outline" className="border-amber-200 text-amber-800 bg-amber-50">{trialLeft} days left in trial</Badge>
               )}
@@ -76,8 +84,8 @@ export default function Billing() {
       </Card>
 
       <div className="grid md:grid-cols-3 gap-4">
-        {plans.map((p) => {
-          const highlighted = p.lookup_key === "vetaura_clinic_monthly";
+        {corePlans.map((p) => {
+          const highlighted = p.lookup_key === "vetaura_growth_monthly";
           const bullets = HIGHLIGHTS[p.lookup_key] || [];
           const current = clinic.plan && p.lookup_key.includes(clinic.plan);
           return (
@@ -87,7 +95,7 @@ export default function Billing() {
               <div className={`font-serif-display text-2xl font-semibold mt-1 ${highlighted ? "text-white" : "text-emerald-950"}`}>{p.product.replace("Vetaura ", "")}</div>
               <div className="flex items-baseline gap-1 mt-3">
                 <span className={`font-serif-display text-4xl font-semibold ${highlighted ? "text-white" : "text-emerald-950"}`}>${p.amount / 100}</span>
-                <span className={`text-sm ${highlighted ? "text-emerald-200/80" : "text-slate-500"}`}>/mo</span>
+                <span className={`text-sm ${highlighted ? "text-emerald-200/80" : "text-slate-500"}`}>/ loc / mo</span>
               </div>
               <ul className="space-y-1.5 mt-5 flex-1">
                 {bullets.map((b, i) => (
@@ -108,7 +116,31 @@ export default function Billing() {
           );
         })}
       </div>
-      <div className="text-xs text-slate-500 text-center">Powered by Stripe · test card 4242 4242 4242 4242, any future expiry, any CVC.</div>
+
+      {scribe && (
+        <Card className="p-6 rounded-2xl border-emerald-100 bg-emerald-50/40 shadow-sm" data-testid={`billing-plan-${SCRIBE_KEY}`}>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Mic className="h-4 w-4 text-emerald-700" />
+                <div className="text-xs uppercase tracking-widest text-emerald-800 font-semibold">Ambient Scribe · per DVM add-on</div>
+              </div>
+              <div className="font-serif-display text-2xl font-semibold text-emerald-950 mt-1">${scribe.amount / 100} <span className="text-sm text-slate-500 font-sans">/ DVM / month</span></div>
+              <div className="text-sm text-slate-600 mt-1">Unlimited ambient SOAP scribing per veterinarian on top of any core plan.</div>
+            </div>
+            <Button
+              onClick={() => checkout(SCRIBE_KEY)}
+              disabled={busy === SCRIBE_KEY}
+              data-testid={`billing-cta-${SCRIBE_KEY}`}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-full h-11 px-6"
+            >
+              {busy === SCRIBE_KEY ? <Loader2 className="h-4 w-4 animate-spin" /> : (<>Add per-DVM scribe <Sparkles className="ml-2 h-4 w-4" /></>)}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      <div className="text-xs text-slate-500 text-center">Powered by Stripe · test card 4242 4242 4242 4242, any future expiry, any CVC. Prices are per <span className="font-semibold text-slate-800">clinic location</span>. Voice overage: $0.25/min beyond your plan allowance.</div>
     </div>
   );
 }

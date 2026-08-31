@@ -35,7 +35,7 @@ const STATS = [
   },
 ];
 
-const COST_PER_DVM = 199; // Clinic plan monthly
+const COST_PER_DVM = 399; // Growth plan monthly per location
 const RECOVERED_PER_DVM = 5610;
 
 const COMPARE = [
@@ -101,7 +101,7 @@ export default function ROI() {
               <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
                 <div className="text-[10px] uppercase tracking-widest text-emerald-200/80 font-semibold">Cost</div>
                 <div className="mt-1 font-serif-display text-3xl font-semibold text-white">${COST_PER_DVM}</div>
-                <div className="text-xs text-emerald-100/70">Clinic plan · up to 8 seats</div>
+                <div className="text-xs text-emerald-100/70">Growth plan · unlimited staff · per location</div>
               </div>
               <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
                 <div className="text-[10px] uppercase tracking-widest text-emerald-200/80 font-semibold">Recovered / DVM</div>
