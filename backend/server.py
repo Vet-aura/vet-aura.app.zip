@@ -21,6 +21,9 @@ from ai_service import (
 from seed_data import build_seed
 from auth import build_auth_routes, make_auth_dep
 from stripe_service import ensure_catalog, build_stripe_routes, get_tax_mode
+from scribe_templates import build_template_routes, get_template, template_prompt_block
+from tryit_service import build_tryit_routes
+from twilio_service import build_twilio_routes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("vetaura")
@@ -87,6 +90,7 @@ async def audit(user, action: str, target: str = "", metadata: dict | None = Non
 class SoapReq(BaseModel):
     transcript: str
     patient_id: Optional[str] = None
+    template_id: Optional[str] = None
 
 
 class DifferentialReq(BaseModel):
@@ -422,8 +426,12 @@ async def scribe_soap(req: SoapReq, user=Depends(auth_dep)):
         pat = await db.patients.find_one({"id": req.patient_id, "clinic_id": user["clinic_id"]})
         if pat:
             context = f"Pet: {pat['name']} — {pat['species']} — {pat['breed']}, age {pat['age_years']}, {pat.get('sex','')}, {pat.get('weight_kg','?')}kg. Active problems: {', '.join(pat.get('active_problems', []))}."
-    result = await generate_soap(req.transcript, context)
-    await audit(user, "ai_soap_draft", target=req.patient_id or "")
+    template_block = ""
+    if req.template_id:
+        tpl = await get_template(db, user["clinic_id"], req.template_id)
+        template_block = template_prompt_block(tpl)
+    result = await generate_soap(req.transcript, context, template_block)
+    await audit(user, "ai_soap_draft", target=req.patient_id or "", metadata={"template_id": req.template_id or ""})
     return result
 
 
@@ -922,10 +930,66 @@ async def receptionist_sessions(user=Depends(auth_dep)):
     return sessions
 
 
+# ---------- Plan-based voice usage summary ----------
+VOICE_PLAN_CAPS = {
+    "starter": 0,     # no voice
+    "growth": 200,    # 200 min/mo
+    "pro": 800,       # 800 min/mo
+    "solo": 50,       # legacy plan
+    "clinic": 250,    # legacy plan
+    "multi-site": 1000,  # legacy plan
+    "demo": 30,
+}
+VOICE_OVERAGE_CENTS_PER_MIN = 35
+
+
+@api.get("/voice/usage-summary")
+async def voice_usage_summary(user=Depends(auth_dep)):
+    cid = user["clinic_id"]
+    clinic = await db.clinics.find_one({"clinic_id": cid}, {"_id": 0}) or {}
+    plan = (clinic.get("plan") or "starter").lower()
+    # Sum current month
+    now = datetime.now(timezone.utc)
+    month_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc).isoformat()
+    rows = await db.voice_usage.aggregate([
+        {"$match": {"clinic_id": cid, "kind": "voice", "at": {"$gte": month_start}}},
+        {"$group": {"_id": None, "seconds": {"$sum": "$seconds"}, "calls": {"$sum": 1}}},
+    ]).to_list(1)
+    voice_seconds = rows[0]["seconds"] if rows else 0
+    voice_minutes = round(voice_seconds / 60, 1)
+    cap = VOICE_PLAN_CAPS.get(plan, 0)
+    overage_min = max(0, voice_minutes - cap)
+    overage_cents = int(round(overage_min * VOICE_OVERAGE_CENTS_PER_MIN))
+    sms_rows = await db.voice_usage.aggregate([
+        {"$match": {"clinic_id": cid, "kind": "sms", "at": {"$gte": month_start}}},
+        {"$group": {"_id": None, "count": {"$sum": 1}}},
+    ]).to_list(1)
+    return {
+        "plan": plan,
+        "voice_minutes": voice_minutes,
+        "voice_minutes_cap": cap,
+        "voice_minutes_used_pct": round(min(100, (voice_minutes / cap * 100) if cap else 0), 1),
+        "overage_minutes": overage_min,
+        "overage_cost_cents": overage_cents,
+        "sms_count": sms_rows[0]["count"] if sms_rows else 0,
+        "month_start": month_start,
+    }
+
+
 # ---------- Wire routers ----------
 app.include_router(api)
 app.include_router(build_auth_routes(db))
 app.include_router(build_stripe_routes(db, auth_dep))
+app.include_router(build_template_routes(db, auth_dep))
+app.include_router(build_tryit_routes(db))
+app.include_router(build_twilio_routes(
+    db, auth_dep,
+    receptionist_reply_fn=receptionist_reply,
+    get_or_create_config_fn=get_or_create_receptionist_config,
+    emergency_kw_fn=emergency_keyword_hit,
+    create_task_fn=create_task,
+    transcribe_audio_fn=transcribe_audio,
+))
 
 app.add_middleware(
     CORSMiddleware,

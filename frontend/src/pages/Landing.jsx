@@ -30,13 +30,16 @@ export default function Landing() {
             Vetaura classifies every client message, drafts staff-reviewed replies, auto-generates every post-op and follow-up task, and surfaces the patients overdue for vaccines, dental and monitoring — plus an ambient SOAP scribe and multilingual owner discharges. All vet-in-the-loop.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link to="/signup" data-testid="landing-cta-signup">
+            <Link to="/try-it" data-testid="landing-cta-try-it">
               <Button className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-full px-6 h-11">
-                Start your free trial <ArrowRight className="ml-2 h-4 w-4" />
+                Try it on your clinic <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
+            <Link to="/signup" data-testid="landing-cta-signup">
+              <Button variant="outline" className="rounded-full px-6 h-11 border-emerald-200 hover:bg-emerald-50 text-emerald-900">Start free trial</Button>
+            </Link>
             <Link to="/demo" data-testid="landing-cta-demo">
-              <Button variant="outline" className="rounded-full px-6 h-11 border-emerald-200 hover:bg-emerald-50 text-emerald-900">Book a live demo</Button>
+              <Button variant="ghost" className="rounded-full px-6 h-11 text-emerald-900 hover:bg-emerald-50">Book a live demo</Button>
             </Link>
           </div>
           <div className="mt-10 flex items-center gap-6 text-xs text-slate-500">

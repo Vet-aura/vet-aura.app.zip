@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Mic, Square, Sparkles, FileCheck2, Save, Wand2, RotateCcw } from "lucide-react";
+import { Mic, Square, Sparkles, FileCheck2, Save, Wand2, RotateCcw, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 const SAMPLES = [
@@ -28,6 +29,8 @@ const emptySoap = { subjective: "", objective: "", assessment: "", plan: "", con
 export default function AmbientScribe() {
   const [patients, setPatients] = useState([]);
   const [patientId, setPatientId] = useState("");
+  const [templates, setTemplates] = useState([]);
+  const [templateId, setTemplateId] = useState("");
   const [transcript, setTranscript] = useState("");
   const [soap, setSoap] = useState(emptySoap);
   const [busy, setBusy] = useState(false);
@@ -37,9 +40,11 @@ export default function AmbientScribe() {
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
   const tickRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     api.get("/patients").then((r) => setPatients(r.data)).catch(() => {});
+    api.get("/scribe/templates").then((r) => setTemplates(r.data || [])).catch(() => {});
   }, []);
 
   useEffect(() => () => {
@@ -47,18 +52,42 @@ export default function AmbientScribe() {
     if (mediaRef.current?.state === "recording") mediaRef.current.stop();
   }, []);
 
+  function pickMime() {
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/mp4",
+      "audio/mpeg",
+      "audio/ogg;codecs=opus",
+    ];
+    for (const m of candidates) {
+      if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+    }
+    return "";
+  }
+
   async function startRec() {
+    if (typeof MediaRecorder === "undefined") {
+      return toast.error("Recording is not supported in this browser. Load a sample below.");
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
+      const mime = pickMime();
+      const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      const chosen = mr.mimeType || mime || "audio/webm";
       chunksRef.current = [];
       mr.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
       mr.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        await uploadForTranscription(blob);
+        const blob = new Blob(chunksRef.current, { type: chosen });
+        if (blob.size < 1000) {
+          toast.error("Recording too short. Try again for at least 2 seconds.");
+          return;
+        }
+        const ext = chosen.includes("mp4") ? "mp4" : chosen.includes("mpeg") ? "mp3" : chosen.includes("ogg") ? "ogg" : "webm";
+        await uploadForTranscription(blob, `session.${ext}`);
       };
-      mr.start();
+      mr.start(1000);
       mediaRef.current = mr;
       setRecording(true);
       setElapsed(0);
@@ -74,14 +103,28 @@ export default function AmbientScribe() {
     setRecording(false);
   }
 
-  async function uploadForTranscription(blob) {
+  async function onFilePick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) return toast.error("Audio must be under 25 MB.");
+    await uploadForTranscription(file, file.name);
+  }
+
+  async function uploadForTranscription(blob, filename = "session.webm") {
     setBusy(true);
     try {
       const fd = new FormData();
-      fd.append("audio", blob, "session.webm");
-      const { data } = await api.post("/scribe/transcribe", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      setTranscript((prev) => (prev ? prev + " " : "") + data.transcript);
-      toast.success("Transcription complete");
+      fd.append("audio", blob, filename);
+      // NOTE: Do NOT set Content-Type manually — axios/browser must include the multipart boundary.
+      const { data } = await api.post("/scribe/transcribe", fd);
+      const chunk = (data.transcript || "").trim();
+      if (!chunk) {
+        toast.info("No speech detected. Try recording a bit longer.");
+      } else {
+        setTranscript((prev) => (prev ? prev + " " : "") + chunk);
+        toast.success("Transcription complete");
+      }
     } catch (e) {
       toast.error("Transcription failed. Try shorter audio or use a sample.");
     } finally {
@@ -93,7 +136,7 @@ export default function AmbientScribe() {
     if (!transcript.trim()) return toast.info("Add a transcript first — record, or load a sample.");
     setGenBusy(true);
     try {
-      const { data } = await api.post("/scribe/soap", { transcript, patient_id: patientId || null });
+      const { data } = await api.post("/scribe/soap", { transcript, patient_id: patientId || null, template_id: templateId || null });
       setSoap({
         subjective: data.subjective || "",
         objective: data.objective || "",
@@ -164,6 +207,34 @@ export default function AmbientScribe() {
             </Select>
           </Card>
 
+          <Card className="p-5 rounded-2xl border-emerald-100 bg-white shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold">Template</div>
+                <div className="text-[11px] text-slate-500">Shape the draft to your house style.</div>
+              </div>
+              <Link to="/app/scribe/templates" className="text-[11px] text-emerald-700 hover:underline" data-testid="scribe-manage-templates-link">Manage →</Link>
+            </div>
+            <Select value={templateId || "__none__"} onValueChange={(v) => setTemplateId(v === "__none__" ? "" : v)}>
+              <SelectTrigger data-testid="scribe-template-select">
+                <SelectValue placeholder="No template (free-form)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No template · free-form</SelectItem>
+                {templates.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}{t.is_default ? "" : " · custom"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {templateId && (
+              <div className="mt-3 text-[11px] text-slate-500">
+                {(templates.find((t) => t.id === templateId) || {}).description}
+              </div>
+            )}
+          </Card>
+
           <Card className="p-5 rounded-2xl border-emerald-100 bg-white shadow-sm relative overflow-hidden">
             <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-3">Live capture</div>
             <div className="flex items-center gap-4">
@@ -189,6 +260,27 @@ export default function AmbientScribe() {
               </div>
             </div>
             <div className="text-[11px] text-slate-500 mt-3">Audio never leaves the browser except for transcription. Nothing is saved to the record until you sign.</div>
+            <div className="mt-4 flex items-center gap-2 pt-3 border-t border-slate-100">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="audio/*,.wav,.mp3,.m4a,.webm,.ogg,.mp4"
+                onChange={onFilePick}
+                className="hidden"
+                data-testid="scribe-file-input"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={busy || recording}
+                data-testid="scribe-upload-btn"
+                className="border-emerald-200 text-emerald-800 hover:bg-emerald-50 rounded-full text-xs"
+              >
+                <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload audio file
+              </Button>
+              <span className="text-[11px] text-slate-500">WAV, MP3, M4A, WebM · up to 25 MB</span>
+            </div>
           </Card>
 
           <Card className="p-5 rounded-2xl border-emerald-100 bg-white shadow-sm">

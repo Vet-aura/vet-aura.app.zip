@@ -75,9 +75,11 @@ OUTPUT FORMAT: Return ONLY valid JSON, no markdown:
 }"""
 
 
-async def generate_soap(transcript: str, patient_context: str = "") -> dict:
+async def generate_soap(transcript: str, patient_context: str = "", template_block: str = "") -> dict:
     user = f"""Patient context:
 {patient_context or 'Not provided.'}
+
+{template_block or ''}
 
 Appointment transcript:
 {transcript}

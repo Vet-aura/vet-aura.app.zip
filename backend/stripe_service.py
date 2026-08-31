@@ -20,28 +20,28 @@ CATALOG = [
     {
         "emergent_product_id": "vetaura_starter",
         "name": "Vetaura Starter",
-        "description": "For solo or small clinics.",
+        "description": "For solo or small clinics — Inbox copilot & Receptionist chat.",
         "tax_code": "txcd_10103001",
         "prices": [
-            {"lookup_key": "vetaura_starter_monthly", "amount": 19900, "currency": "usd", "interval": "month", "trial_period_days": 14},
+            {"lookup_key": "vetaura_starter_monthly", "amount": 24900, "currency": "usd", "interval": "month", "trial_period_days": 14},
         ],
     },
     {
         "emergent_product_id": "vetaura_growth",
         "name": "Vetaura Growth",
-        "description": "For the typical 2–5 doctor clinic.",
+        "description": "For the typical 2–5 doctor clinic — adds Ambient Scribe & 200 voice minutes.",
         "tax_code": "txcd_10103001",
         "prices": [
-            {"lookup_key": "vetaura_growth_monthly", "amount": 39900, "currency": "usd", "interval": "month", "trial_period_days": 14},
+            {"lookup_key": "vetaura_growth_monthly", "amount": 49900, "currency": "usd", "interval": "month", "trial_period_days": 14},
         ],
     },
     {
         "emergent_product_id": "vetaura_pro",
         "name": "Vetaura Pro",
-        "description": "For busy clinics that need phone coverage.",
+        "description": "For busy clinics — Phone/SMS routing, 800 voice minutes, priority support.",
         "tax_code": "txcd_10103001",
         "prices": [
-            {"lookup_key": "vetaura_pro_monthly", "amount": 69900, "currency": "usd", "interval": "month", "trial_period_days": 14},
+            {"lookup_key": "vetaura_pro_monthly", "amount": 89900, "currency": "usd", "interval": "month", "trial_period_days": 14},
         ],
     },
     {
@@ -50,17 +50,22 @@ CATALOG = [
         "description": "Ambient SOAP scribe — per veterinarian.",
         "tax_code": "txcd_10103001",
         "prices": [
-            {"lookup_key": "vetaura_scribe_addon_monthly", "amount": 9900, "currency": "usd", "interval": "month", "trial_period_days": 14},
+            {"lookup_key": "vetaura_scribe_addon_monthly", "amount": 7900, "currency": "usd", "interval": "month", "trial_period_days": 14},
         ],
     },
 ]
 
+BUNDLE_COUPON_ID = "vetaura_scribe_bundle_20"
+BUNDLE_COUPON_NAME = "Scribe bundle · 20% off"
+BUNDLE_COUPON_PERCENT_OFF = 20.0
+
 
 def ensure_catalog():
-    """Idempotently create Vetaura products + prices."""
+    """Idempotently create Vetaura products + prices + bundle coupon."""
     try:
+        # products & prices
+        product_by_lookup: dict[str, str] = {}
         for entry in CATALOG:
-            # find product by metadata
             product = None
             for p in stripe.Product.list(active=True, limit=100).auto_paging_iter():
                 if p.to_dict().get("metadata", {}).get("emergent_product_id") == entry["emergent_product_id"]:
@@ -91,6 +96,23 @@ def ensure_catalog():
                         kwargs["recurring"] = {"interval": price["interval"]}
                     stripe.Price.create(**kwargs)
                     logger.info(f"Stripe price created: {price['lookup_key']}")
+                product_by_lookup[price["lookup_key"]] = product.id
+
+        # Bundle coupon (applies only to the Scribe add-on product)
+        scribe_product_id = product_by_lookup.get("vetaura_scribe_addon_monthly")
+        if scribe_product_id:
+            try:
+                stripe.Coupon.retrieve(BUNDLE_COUPON_ID)
+            except stripe.error.InvalidRequestError:
+                stripe.Coupon.create(
+                    id=BUNDLE_COUPON_ID,
+                    name=BUNDLE_COUPON_NAME,
+                    percent_off=BUNDLE_COUPON_PERCENT_OFF,
+                    duration="forever",
+                    applies_to={"products": [scribe_product_id]},
+                    metadata={"managed_by": "emergent"},
+                )
+                logger.info("Stripe bundle coupon created")
     except Exception as e:
         logger.warning(f"ensure_catalog: {e}")
 
@@ -110,6 +132,13 @@ stripe_router = APIRouter(prefix="/api")
 class CheckoutReq(BaseModel):
     lookup_key: str
     origin_url: str
+
+
+class BundleCheckoutReq(BaseModel):
+    core_lookup_key: str
+    origin_url: str
+    attach_scribe: bool = False
+    scribe_quantity: int = 1
 
 
 def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
@@ -198,6 +227,75 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
             "updated_at": datetime.now(timezone.utc).isoformat(),
         })
         return {"checkout_url": session.url, "session_id": session.id}
+
+    @stripe_router.post("/payments/checkout-bundle")
+    async def checkout_bundle(req: BundleCheckoutReq, user=Depends(auth_dep)):
+        """Attach the Scribe add-on to any core plan in a single checkout with a 20% bundle discount."""
+        core = stripe.Price.list(lookup_keys=[req.core_lookup_key], active=True, limit=1).data
+        if not core:
+            raise HTTPException(400, f"Plan not found: {req.core_lookup_key}")
+        core_price = core[0]
+        line_items = [{"price": core_price.id, "quantity": 1}]
+
+        applied_bundle = False
+        if req.attach_scribe:
+            scribe = stripe.Price.list(lookup_keys=["vetaura_scribe_addon_monthly"], active=True, limit=1).data
+            if not scribe:
+                raise HTTPException(500, "Scribe add-on not configured")
+            qty = max(1, min(20, int(req.scribe_quantity or 1)))
+            line_items.append({"price": scribe[0].id, "quantity": qty})
+            applied_bundle = True
+
+        clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
+        customer_id = clinic.get("stripe_customer_id")
+        if not customer_id:
+            cust = stripe.Customer.create(email=user["email"], name=clinic["name"], metadata={"clinic_id": clinic["clinic_id"]})
+            customer_id = cust.id
+            await db.clinics.update_one({"clinic_id": user["clinic_id"]}, {"$set": {"stripe_customer_id": customer_id}})
+
+        trial_days = 14
+        kwargs = dict(
+            customer=customer_id,
+            line_items=line_items,
+            mode="subscription",
+            success_url=f"{req.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{req.origin_url}/app/billing",
+            metadata={"clinic_id": clinic["clinic_id"], "lookup_key": req.core_lookup_key, "bundle": "1" if applied_bundle else "0"},
+            subscription_data={"trial_period_days": trial_days, "metadata": {"clinic_id": clinic["clinic_id"]}},
+        )
+        if applied_bundle:
+            kwargs["discounts"] = [{"coupon": BUNDLE_COUPON_ID}]
+
+        tax_mode = get_tax_mode()
+        try:
+            if tax_mode == "full":
+                try:
+                    session = stripe.checkout.Session.create(**kwargs, managed_payments={"enabled": True})
+                except stripe.error.InvalidRequestError as e:
+                    msg = (e.user_message or "").lower()
+                    if "managed payments" in msg or "ineligible" in msg:
+                        session = stripe.checkout.Session.create(**kwargs, automatic_tax={"enabled": True}, billing_address_collection="required")
+                    else:
+                        raise
+            else:
+                session = stripe.checkout.Session.create(**kwargs, automatic_tax={"enabled": True}, billing_address_collection="required")
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe bundle checkout error: {e}")
+            raise HTTPException(500, "Stripe checkout error")
+
+        await db.payment_transactions.insert_one({
+            "session_id": session.id,
+            "clinic_id": clinic["clinic_id"],
+            "lookup_key": req.core_lookup_key,
+            "bundle": applied_bundle,
+            "amount": core_price.unit_amount,
+            "currency": core_price.currency,
+            "status": "initiated",
+            "payment_status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        return {"checkout_url": session.url, "session_id": session.id, "bundle_applied": applied_bundle}
 
     @stripe_router.get("/payments/status/{session_id}")
     async def status(session_id: str):

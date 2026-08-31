@@ -12,27 +12,26 @@ const HIGHLIGHTS = {
     "AI-drafted message replies",
     "Follow-up task automation",
     "Care & revenue gap dashboard",
+    "AI Receptionist website chat",
     "2 staff seats",
-    "Fair-use AI allowance",
     "Email support",
   ],
   vetaura_growth_monthly: [
     "Everything in Starter",
-    "Unlimited staff seats",
-    "Automation rules & workflows",
-    "Client texting / email drafts",
-    "Basic ambient SOAP note & discharge drafts",
+    "Ambient SOAP Scribe (unlimited)",
+    "Clinic-editable SOAP template library",
+    "200 receptionist voice minutes / mo",
     "Multilingual owner discharge portal",
-    "Audit log & CSV exports",
-    "Clinic branding + integrations",
+    "Audit log, CSV exports & branding",
+    "Unlimited staff seats",
   ],
   vetaura_pro_monthly: [
     "Everything in Growth",
-    "AI Vet Receptionist (24/7 website chat)",
-    "After-hours coverage & scheduling workflows",
-    "Larger voice / AI allowance",
-    "Priority support",
-    "Onboarding + phone script setup",
+    "Phone & SMS receptionist routing",
+    "Dedicated Twilio number per clinic",
+    "800 receptionist voice minutes / mo",
+    "After-hours voicemail → task workflow",
+    "Priority support & onboarding",
   ],
 };
 
@@ -123,8 +122,9 @@ export default function Pricing() {
                 <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Ambient Scribe add-on</div>
               </div>
               <div className="font-serif-display text-2xl font-semibold text-emerald-950">${scribe.amount / 100} <span className="text-sm text-slate-500 font-sans">/ DVM / mo</span></div>
-              <div className="text-sm text-slate-600 mt-2">Unlimited ambient SOAP scribing per veterinarian: record → Whisper → Claude drafts → sign. Includes species-specific vocabulary and clinic template library.</div>
-              <div className="text-xs text-slate-400 mt-3 font-mono-clinical uppercase tracking-widest">Or day passes: $9 / day per DVM</div>
+              <div className="text-sm text-slate-600 mt-2">Unlimited ambient SOAP scribing per veterinarian: record → Whisper → Claude drafts → sign. Editable template library included.</div>
+              <div className="inline-flex items-center gap-1 mt-3 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] uppercase tracking-widest font-semibold">Bundle 20% off</div>
+              <div className="text-xs text-slate-400 mt-2 font-mono-clinical">Attach at checkout with any core plan.</div>
             </Card>
           )}
 
@@ -146,10 +146,10 @@ export default function Pricing() {
             <div className="text-xs uppercase tracking-widest text-emerald-800 font-semibold">Voice AI allowance</div>
           </div>
           <div className="grid sm:grid-cols-4 gap-3 mt-3 text-sm">
-            <div><span className="font-semibold text-slate-900">Starter:</span> <span className="text-slate-600">50-min trial</span></div>
-            <div><span className="font-semibold text-slate-900">Growth:</span> <span className="text-slate-600">250 min / mo</span></div>
-            <div><span className="font-semibold text-slate-900">Pro:</span> <span className="text-slate-600">1,000 min / mo</span></div>
-            <div><span className="font-semibold text-slate-900">Overage:</span> <span className="text-slate-600">$0.25 / min · packs 500 for $125</span></div>
+            <div><span className="font-semibold text-slate-900">Starter:</span> <span className="text-slate-600">Chat only · no voice</span></div>
+            <div><span className="font-semibold text-slate-900">Growth:</span> <span className="text-slate-600">200 min / mo</span></div>
+            <div><span className="font-semibold text-slate-900">Pro:</span> <span className="text-slate-600">800 min / mo</span></div>
+            <div><span className="font-semibold text-slate-900">Overage:</span> <span className="text-slate-600">$0.35 / min · auto-metered via Stripe</span></div>
           </div>
         </Card>
 
@@ -158,10 +158,13 @@ export default function Pricing() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <div className="text-[10px] uppercase tracking-widest text-amber-300 font-semibold">Launch offer · first 10 clinics</div>
-              <h3 className="mt-2 font-serif-display text-2xl sm:text-3xl font-semibold text-white">$249 / month · $500 setup.</h3>
-              <p className="mt-2 text-emerald-100/85 text-sm max-w-2xl">Inbox copilot, automated follow-ups and client messaging included. AI Receptionist as a $149/mo add-on with 250 minutes bundled. 60-day pilot, month-to-month cancellation. In exchange we ask for structured feedback and — if you're happy — a case study.</p>
+              <h3 className="mt-2 font-serif-display text-2xl sm:text-3xl font-semibold text-white">Growth for $349/mo · Scribe for $59/DVM · $500 setup.</h3>
+              <p className="mt-2 text-emerald-100/85 text-sm max-w-2xl">Locked in for 12 months. Includes 250 receptionist voice minutes, template library, and priority onboarding. 60-day pilot, month-to-month cancellation. In exchange we ask for structured feedback and — if you're happy — a case study.</p>
             </div>
-            <Link to="/demo"><Button className="bg-white text-emerald-900 hover:bg-emerald-50 rounded-full h-11 px-6" data-testid="plan-launch-cta">Claim the pilot <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>
+            <div className="flex gap-3">
+              <Link to="/try-it"><Button variant="outline" className="border-white/40 text-white hover:bg-white/10 rounded-full h-11 px-6" data-testid="plan-try-cta">Try it on your clinic</Button></Link>
+              <Link to="/demo"><Button className="bg-white text-emerald-900 hover:bg-emerald-50 rounded-full h-11 px-6" data-testid="plan-launch-cta">Claim the pilot <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>
+            </div>
           </div>
         </div>
 

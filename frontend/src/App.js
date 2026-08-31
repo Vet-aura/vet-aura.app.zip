@@ -11,6 +11,7 @@ import Demo from "@/pages/marketing/Demo";
 import Security from "@/pages/marketing/Security";
 import HowItWorks from "@/pages/marketing/HowItWorks";
 import ROI from "@/pages/marketing/ROI";
+import TryIt from "@/pages/marketing/TryIt";
 import Terms from "@/pages/marketing/Terms";
 import Privacy from "@/pages/marketing/Privacy";
 import Login from "@/pages/auth/Login";
@@ -35,6 +36,8 @@ import OwnerPortal from "@/pages/OwnerPortal";
 import PaymentResult from "@/pages/PaymentResult";
 import PublicReceptionist from "@/pages/PublicReceptionist";
 import ReceptionistSettings from "@/pages/ReceptionistSettings";
+import ScribeTemplates from "@/pages/ScribeTemplates";
+import PhoneSms from "@/pages/PhoneSms";
 import "@/App.css";
 
 function AppRouter() {
@@ -53,6 +56,7 @@ function AppRouter() {
       <Route path="/security" element={<Security />} />
       <Route path="/how-it-works" element={<HowItWorks />} />
       <Route path="/roi" element={<ROI />} />
+      <Route path="/try-it" element={<TryIt />} />
       <Route path="/legal/terms" element={<Terms />} />
       <Route path="/legal/privacy" element={<Privacy />} />
 
@@ -77,6 +81,8 @@ function AppRouter() {
       <Route path="/app" element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
         <Route index element={<Dashboard />} />
         <Route path="scribe" element={<AmbientScribe />} />
+        <Route path="scribe/templates" element={<ScribeTemplates />} />
+        <Route path="phone" element={<PhoneSms />} />
         <Route path="patients" element={<Patients />} />
         <Route path="patients/:id" element={<PatientDetail />} />
         <Route path="inbox" element={<Inbox />} />

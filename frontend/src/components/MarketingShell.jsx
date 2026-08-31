@@ -19,6 +19,7 @@ export default function MarketingShell({ children }) {
             {[
               { to: "/features", label: "Features", tid: "nav-features" },
               { to: "/pricing", label: "Pricing", tid: "nav-pricing" },
+              { to: "/try-it", label: "Try it", tid: "nav-try-it" },
               { to: "/roi", label: "ROI", tid: "nav-roi" },
               { to: "/how-it-works", label: "For pet parents", tid: "nav-how" },
               { to: "/security", label: "Security", tid: "nav-security" },

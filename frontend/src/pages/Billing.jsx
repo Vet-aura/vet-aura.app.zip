@@ -8,10 +8,10 @@ import { CreditCard, Sparkles, Check, Loader2, Mic } from "lucide-react";
 import { toast } from "sonner";
 
 const HIGHLIGHTS = {
-  vetaura_starter_monthly: ["Inbox + follow-ups", "2 staff seats", "Fair-use AI allowance"],
-  vetaura_growth_monthly: ["Everything in Starter", "Unlimited staff", "Basic SOAP & discharge drafts", "Multilingual owner portal"],
-  vetaura_pro_monthly: ["Everything in Growth", "AI Vet Receptionist", "1,000 voice min / mo", "Priority support"],
-  vetaura_scribe_addon_monthly: ["Unlimited ambient SOAP scribing", "Per veterinarian add-on", "Species-specific vocab"],
+  vetaura_starter_monthly: ["Inbox + follow-ups", "Receptionist chat widget", "2 staff seats"],
+  vetaura_growth_monthly: ["Everything in Starter", "Ambient SOAP Scribe", "200 voice min / mo", "Template library"],
+  vetaura_pro_monthly: ["Everything in Growth", "Phone & SMS routing", "800 voice min / mo", "Priority support"],
+  vetaura_scribe_addon_monthly: ["Unlimited ambient SOAP scribing", "Per veterinarian add-on", "Template library included"],
 };
 
 const SCRIBE_KEY = "vetaura_scribe_addon_monthly";
@@ -20,6 +20,8 @@ export default function Billing() {
   const { user } = useAuth();
   const [plans, setPlans] = useState([]);
   const [busy, setBusy] = useState(null);
+  const [attachScribe, setAttachScribe] = useState(false);
+  const [scribeQty, setScribeQty] = useState(1);
 
   useEffect(() => {
     api.get("/plans").then((r) => setPlans(r.data.plans || [])).catch(() => {});
@@ -28,6 +30,17 @@ export default function Billing() {
   async function checkout(lookup_key) {
     setBusy(lookup_key);
     try {
+      // Bundle path: attach scribe to core plan in one checkout with 20% off scribe.
+      if (lookup_key !== SCRIBE_KEY && attachScribe) {
+        const { data } = await api.post("/payments/checkout-bundle", {
+          core_lookup_key: lookup_key,
+          origin_url: window.location.origin,
+          attach_scribe: true,
+          scribe_quantity: Math.max(1, Math.min(20, Number(scribeQty) || 1)),
+        });
+        window.location.href = data.checkout_url;
+        return;
+      }
       const { data } = await api.post("/payments/checkout", {
         lookup_key,
         origin_url: window.location.origin,
@@ -88,6 +101,9 @@ export default function Billing() {
           const highlighted = p.lookup_key === "vetaura_growth_monthly";
           const bullets = HIGHLIGHTS[p.lookup_key] || [];
           const current = clinic.plan && p.lookup_key.includes(clinic.plan);
+          const scribeBundled = attachScribe && scribe;
+          const scribeBundleCents = scribeBundled ? Math.round(scribe.amount * (scribeQty || 1) * 0.8) : 0;
+          const bundleTotal = p.amount + scribeBundleCents;
           return (
             <Card key={p.lookup_key} className={`p-6 rounded-2xl relative flex flex-col ${highlighted ? "bg-emerald-900 text-emerald-50 border-emerald-900" : "bg-white border-emerald-100"}`} data-testid={`billing-plan-${p.lookup_key}`}>
               {highlighted && <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-amber-500 text-white text-[10px] font-semibold uppercase tracking-widest">Most popular</div>}
@@ -97,6 +113,11 @@ export default function Billing() {
                 <span className={`font-serif-display text-4xl font-semibold ${highlighted ? "text-white" : "text-emerald-950"}`}>${p.amount / 100}</span>
                 <span className={`text-sm ${highlighted ? "text-emerald-200/80" : "text-slate-500"}`}>/ loc / mo</span>
               </div>
+              {scribeBundled && (
+                <div className={`text-xs mt-1 ${highlighted ? "text-amber-200" : "text-amber-700"}`}>
+                  + ${(scribeBundleCents / 100).toFixed(2)} Scribe × {scribeQty} (20% off) · total <span className="font-semibold">${(bundleTotal / 100).toFixed(2)}/mo</span>
+                </div>
+              )}
               <ul className="space-y-1.5 mt-5 flex-1">
                 {bullets.map((b, i) => (
                   <li key={i} className={`flex items-start gap-2 text-sm ${highlighted ? "text-emerald-50" : "text-slate-700"}`}>
@@ -116,6 +137,42 @@ export default function Billing() {
           );
         })}
       </div>
+
+      {scribe && (
+        <Card className="p-5 rounded-2xl border-amber-200 bg-amber-50/60 shadow-sm" data-testid="billing-bundle-toggle">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={attachScribe}
+                onChange={(e) => setAttachScribe(e.target.checked)}
+                data-testid="billing-attach-scribe"
+                className="mt-1 h-4 w-4 accent-emerald-700"
+              />
+              <span>
+                <span className="font-semibold text-emerald-950">Bundle Ambient Scribe · 20% off</span>
+                <span className="block text-xs text-slate-600 mt-0.5">Adds the Scribe add-on to your checkout. First-year bundle discount is auto-applied for as long as you keep both.</span>
+              </span>
+            </label>
+            {attachScribe && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-slate-600">DVMs</label>
+                <input
+                  type="number" min={1} max={20}
+                  value={scribeQty}
+                  onChange={(e) => setScribeQty(e.target.value)}
+                  data-testid="billing-scribe-qty"
+                  className="w-16 h-9 rounded-md border border-emerald-200 px-2 text-sm bg-white"
+                />
+                <div className="text-xs text-slate-600 font-mono-clinical">
+                  ${(scribe.amount / 100).toFixed(0)} × {scribeQty} → <span className="line-through">${((scribe.amount * scribeQty) / 100).toFixed(2)}</span>{" "}
+                  <span className="text-emerald-700 font-semibold">${((scribe.amount * scribeQty * 0.8) / 100).toFixed(2)}</span>/mo
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {scribe && (
         <Card className="p-6 rounded-2xl border-emerald-100 bg-emerald-50/40 shadow-sm" data-testid={`billing-plan-${SCRIBE_KEY}`}>
@@ -140,7 +197,7 @@ export default function Billing() {
         </Card>
       )}
 
-      <div className="text-xs text-slate-500 text-center">Powered by Stripe · test card 4242 4242 4242 4242, any future expiry, any CVC. Prices are per <span className="font-semibold text-slate-800">clinic location</span>. Voice overage: $0.25/min beyond your plan allowance.</div>
+      <div className="text-xs text-slate-500 text-center">Powered by Stripe · test card 4242 4242 4242 4242, any future expiry, any CVC. Prices are per <span className="font-semibold text-slate-800">clinic location</span>. Voice overage: $0.35/min beyond your plan allowance, auto-metered.</div>
     </div>
   );
 }

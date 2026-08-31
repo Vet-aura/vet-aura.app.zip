@@ -226,17 +226,18 @@ class TestStripe:
         assert r.status_code == 200
         plans = r.json().get("plans", [])
         keys = {p["lookup_key"] for p in plans}
-        assert {"vetaura_solo_monthly", "vetaura_clinic_monthly", "vetaura_multisite_monthly"}.issubset(keys)
+        assert {"vetaura_starter_monthly", "vetaura_growth_monthly", "vetaura_pro_monthly", "vetaura_scribe_addon_monthly"}.issubset(keys)
         by_key = {p["lookup_key"]: p for p in plans}
-        assert by_key["vetaura_solo_monthly"]["amount"] == 4900
-        assert by_key["vetaura_clinic_monthly"]["amount"] == 19900
-        assert by_key["vetaura_multisite_monthly"]["amount"] == 49900
+        assert by_key["vetaura_starter_monthly"]["amount"] == 24900
+        assert by_key["vetaura_growth_monthly"]["amount"] == 49900
+        assert by_key["vetaura_pro_monthly"]["amount"] == 89900
+        assert by_key["vetaura_scribe_addon_monthly"]["amount"] == 7900
         for p in plans:
             assert p.get("trial_period_days") == 14
 
     def test_checkout_returns_stripe_url(self, sess, account_a):
         r = sess.post(f"{API}/payments/checkout", headers=h(account_a["token"]), json={
-            "lookup_key": "vetaura_solo_monthly",
+            "lookup_key": "vetaura_starter_monthly",
             "origin_url": BASE_URL,
         })
         assert r.status_code == 200, r.text
