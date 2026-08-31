@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import MarketingShell from "@/components/MarketingShell";
 import { Button } from "@/components/ui/button";
-import { Mic, Stethoscope, ClipboardList, MessagesSquare, ArrowRight, ShieldCheck, Sparkles, Languages, FileCheck2, LineChart } from "lucide-react";
+import { Mic, Stethoscope, ClipboardList, MessagesSquare, ArrowRight, ShieldCheck, Sparkles, Languages, FileCheck2, LineChart, Clock, DollarSign, TrendingUp, Smartphone, Pill, AlertTriangle, CalendarPlus, Lock, Server, KeyRound, Eye, PawPrint } from "lucide-react";
 
 const FEATURES = [
   { icon: Mic, title: "Ambient SOAP scribe", body: "Record the exam — Vetaura drafts the S/O/A/P for you to review and sign in seconds." },
@@ -109,6 +109,133 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-6 pb-16 flex flex-wrap gap-3">
           <Link to="/pricing"><Button className="bg-white text-emerald-900 hover:bg-emerald-50 rounded-full px-6 h-11" data-testid="landing-view-pricing">View pricing <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>
           <Link to="/signup"><Button variant="outline" className="rounded-full px-6 h-11 border-white/30 text-white bg-white/0 hover:bg-white/10" data-testid="landing-start-trial-bottom">Start free trial</Button></Link>
+        </div>
+      </section>
+
+      {/* ROI numbers */}
+      <section className="max-w-7xl mx-auto px-6 py-20">
+        <div className="max-w-2xl">
+          <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold">The numbers</div>
+          <h2 className="mt-2 font-serif-display text-3xl sm:text-4xl font-semibold text-emerald-950 tracking-tight">Time back. Money back. Better care.</h2>
+          <p className="mt-3 text-slate-600">A single Clinic-plan practice with 3 DVMs recovers &gt;$16,000 in reclaimed clinical hours in month one — for less than a single VA hire.</p>
+        </div>
+
+        <div className="mt-10 grid md:grid-cols-4 gap-4">
+          {[
+            { icon: Clock, big: "~2 hr / day", label: "documentation reclaimed per DVM" },
+            { icon: DollarSign, big: "$5,600 / mo", label: "value recovered per DVM (est.)" },
+            { icon: TrendingUp, big: "+15–25%", label: "recheck & follow-through" },
+            { icon: ShieldCheck, big: "≤ 5 min", label: "exam to signed SOAP" },
+          ].map((s) => (
+            <div key={s.big} className="p-5 rounded-2xl border border-emerald-100 bg-white shadow-sm" data-testid={`landing-roi-${s.big.replace(/\W+/g,'').toLowerCase()}`}>
+              <div className="flex items-start justify-between">
+                <div className="font-serif-display text-3xl font-semibold text-emerald-950">{s.big}</div>
+                <div className="h-8 w-8 rounded-lg bg-emerald-50 border border-emerald-100 grid place-items-center text-emerald-700"><s.icon className="h-4 w-4" /></div>
+              </div>
+              <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold mt-2">{s.label}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-6">
+          <Link to="/roi" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-800 hover:text-emerald-900" data-testid="landing-see-roi">See the full ROI breakdown <ArrowRight className="h-4 w-4" /></Link>
+        </div>
+      </section>
+
+      {/* Owner walkthrough */}
+      <section className="bg-emerald-50/50 border-y border-emerald-100">
+        <div className="max-w-7xl mx-auto px-6 py-20 grid lg:grid-cols-2 gap-10 items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-emerald-200 text-emerald-800 text-xs font-semibold uppercase tracking-wider">
+              <PawPrint className="h-3.5 w-3.5" /> For your pet parents
+            </div>
+            <h2 className="mt-3 font-serif-display text-3xl sm:text-4xl font-semibold text-emerald-950 tracking-tight leading-tight">How pet parents access their pet's plan — in 3 taps.</h2>
+            <div className="mt-6 space-y-4">
+              {[
+                { n: 1, icon: Smartphone, t: "Receive a private link", d: "The clinic texts or emails a clinic-branded link. No app. No password." },
+                { n: 2, icon: Pill, t: "See meds, warnings, recheck", d: "Everything in their language, in plain words, mobile-first." },
+                { n: 3, icon: CalendarPlus, t: "One-tap recheck booking", d: "The clinic gets a booking request; the appointment lands on your schedule." },
+              ].map((s) => (
+                <div key={s.n} className="flex items-start gap-3">
+                  <div className="h-8 w-8 rounded-full bg-emerald-700 text-white grid place-items-center font-mono-clinical text-xs flex-shrink-0">{s.n}</div>
+                  <div>
+                    <div className="font-semibold text-emerald-950 flex items-center gap-2"><s.icon className="h-4 w-4 text-emerald-700" /> {s.t}</div>
+                    <div className="text-sm text-slate-600 mt-0.5">{s.d}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Link to="/how-it-works" className="mt-6 inline-flex items-center gap-1 text-sm font-semibold text-emerald-800 hover:text-emerald-900" data-testid="landing-owner-walkthrough">See the full owner walkthrough <ArrowRight className="h-4 w-4" /></Link>
+          </div>
+
+          {/* Phone mock */}
+          <div className="flex justify-center">
+            <div className="w-[300px] rounded-[36px] bg-slate-900 p-3 shadow-2xl">
+              <div className="rounded-[28px] overflow-hidden bg-[#f8f9f6]">
+                <div className="bg-emerald-800 text-white px-5 py-5">
+                  <div className="flex items-center gap-2">
+                    <div className="h-10 w-10 rounded-xl bg-white/15 grid place-items-center"><PawPrint className="h-5 w-5" /></div>
+                    <div>
+                      <div className="text-[9px] uppercase tracking-widest text-white/70 font-semibold">Discharge summary</div>
+                      <div className="font-serif-display text-base font-semibold">Meadow Ridge Vet</div>
+                      <div className="text-[10px] text-white/80">For Bella · Signed by Dr. Reyes</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="text-xs text-slate-700 leading-relaxed">Hi Amelia — Bella had a great visit today. Her ear infection is looking a lot better…</div>
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3">
+                    <div className="text-[9px] uppercase tracking-widest text-emerald-700 font-semibold flex items-center gap-1"><Pill className="h-3 w-3" /> Medications</div>
+                    <div className="mt-1 text-xs font-semibold text-emerald-900">Mometamax drops</div>
+                    <div className="text-[10px] font-mono-clinical text-slate-600">1 drop each ear · once daily · 10 days</div>
+                  </div>
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-3">
+                    <div className="text-[9px] uppercase tracking-widest text-amber-800 font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Call immediately if…</div>
+                    <div className="text-[10px] text-amber-900 mt-1">Bella becomes lethargic, stops eating, or the ear swells.</div>
+                  </div>
+                  <button className="w-full h-9 rounded-full bg-emerald-800 text-white text-xs font-semibold flex items-center justify-center gap-1"><CalendarPlus className="h-3 w-3" /> Request recheck appointment</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Security promise */}
+      <section className="max-w-7xl mx-auto px-6 py-20">
+        <div className="text-center max-w-2xl mx-auto">
+          <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Safe, private, yours</div>
+          <h2 className="mt-2 font-serif-display text-3xl sm:text-4xl font-semibold text-emerald-950 tracking-tight">Your clinic's data. In your clinic's control.</h2>
+          <p className="mt-3 text-slate-600">Every clinic gets an isolated tenant. Data encrypted end-to-end, siloed by clinic_id, never used to train AI, exportable at any time, deletable on request.</p>
+        </div>
+
+        <div className="mt-10 grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { icon: Lock, t: "AES-256 at rest · TLS 1.3", d: "Encrypted everywhere, always." },
+            { icon: Server, t: "Tenant isolation", d: "Query-layer scoping. Never bleeds between clinics." },
+            { icon: KeyRound, t: "Your MFA · Your policy", d: "Google Workspace SSO. Instant revocation." },
+            { icon: Eye, t: "No training on your data", d: "Zero-retention model APIs. Not for sale, not for training." },
+          ].map((f) => (
+            <div key={f.t} className="p-5 rounded-2xl border border-emerald-100 bg-white shadow-sm" data-testid={`landing-security-${f.t.split(" ")[0].toLowerCase()}`}>
+              <div className="h-9 w-9 rounded-lg bg-emerald-50 border border-emerald-100 grid place-items-center text-emerald-700 mb-2"><f.icon className="h-4 w-4" /></div>
+              <div className="font-semibold text-emerald-950 text-sm">{f.t}</div>
+              <div className="text-xs text-slate-600 mt-1">{f.d}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 text-center">
+          <Link to="/security" className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-800 hover:text-emerald-900" data-testid="landing-security-link">See the full security & legal breakdown <ArrowRight className="h-4 w-4" /></Link>
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="max-w-7xl mx-auto px-6 pb-24">
+        <div className="rounded-3xl bg-emerald-900 text-white p-10 sm:p-16 text-center">
+          <div className="text-[10px] uppercase tracking-widest text-emerald-200/80 font-semibold">Turn-key. Vet-in-the-loop. Ready today.</div>
+          <h2 className="mt-3 font-serif-display text-3xl sm:text-4xl lg:text-5xl font-semibold leading-tight">The AI copilot every veterinary practice will run in 2026.</h2>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link to="/signup"><Button className="bg-white text-emerald-900 hover:bg-emerald-50 rounded-full h-11 px-6" data-testid="landing-final-signup">Start your free trial <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>
+            <Link to="/demo"><Button variant="outline" className="rounded-full h-11 px-6 border-white/30 text-white bg-white/0 hover:bg-white/10" data-testid="landing-final-demo">Book a live demo</Button></Link>
+          </div>
         </div>
       </section>
     </MarketingShell>

@@ -8,6 +8,11 @@ import Pricing from "@/pages/marketing/Pricing";
 import Features from "@/pages/marketing/Features";
 import FAQ from "@/pages/marketing/FAQ";
 import Demo from "@/pages/marketing/Demo";
+import Security from "@/pages/marketing/Security";
+import HowItWorks from "@/pages/marketing/HowItWorks";
+import ROI from "@/pages/marketing/ROI";
+import Terms from "@/pages/marketing/Terms";
+import Privacy from "@/pages/marketing/Privacy";
 import Login from "@/pages/auth/Login";
 import Signup from "@/pages/auth/Signup";
 import AuthCallback from "@/pages/auth/AuthCallback";
@@ -41,6 +46,11 @@ function AppRouter() {
       <Route path="/features" element={<Features />} />
       <Route path="/faq" element={<FAQ />} />
       <Route path="/demo" element={<Demo />} />
+      <Route path="/security" element={<Security />} />
+      <Route path="/how-it-works" element={<HowItWorks />} />
+      <Route path="/roi" element={<ROI />} />
+      <Route path="/legal/terms" element={<Terms />} />
+      <Route path="/legal/privacy" element={<Privacy />} />
 
       {/* Auth */}
       <Route path="/login" element={<Login />} />

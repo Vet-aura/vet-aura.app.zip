@@ -19,6 +19,9 @@ export default function MarketingShell({ children }) {
             {[
               { to: "/features", label: "Features", tid: "nav-features" },
               { to: "/pricing", label: "Pricing", tid: "nav-pricing" },
+              { to: "/roi", label: "ROI", tid: "nav-roi" },
+              { to: "/how-it-works", label: "For pet parents", tid: "nav-how" },
+              { to: "/security", label: "Security", tid: "nav-security" },
               { to: "/faq", label: "FAQ", tid: "nav-faq" },
               { to: "/demo", label: "Book a demo", tid: "nav-demo" },
             ].map((n) => (
@@ -42,7 +45,7 @@ export default function MarketingShell({ children }) {
       <main className="flex-1">{children}</main>
 
       <footer className="border-t border-emerald-100 bg-white/60">
-        <div className="max-w-7xl mx-auto px-6 py-10 grid sm:grid-cols-4 gap-6 text-sm">
+        <div className="max-w-7xl mx-auto px-6 py-10 grid sm:grid-cols-5 gap-6 text-sm">
           <div>
             <div className="flex items-center gap-2 mb-3">
               <div className="h-8 w-8 rounded-lg bg-emerald-700 grid place-items-center text-white"><PawPrint className="h-4 w-4" /></div>
@@ -55,7 +58,18 @@ export default function MarketingShell({ children }) {
             <ul className="space-y-1.5 text-slate-700">
               <li><Link to="/features" className="hover:text-emerald-800">Features</Link></li>
               <li><Link to="/pricing" className="hover:text-emerald-800">Pricing</Link></li>
+              <li><Link to="/roi" className="hover:text-emerald-800">ROI</Link></li>
+              <li><Link to="/how-it-works" className="hover:text-emerald-800">For pet parents</Link></li>
+              <li><Link to="/security" className="hover:text-emerald-800">Security</Link></li>
               <li><Link to="/faq" className="hover:text-emerald-800">FAQ</Link></li>
+            </ul>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-3">Legal</div>
+            <ul className="space-y-1.5 text-slate-700">
+              <li><Link to="/legal/terms" className="hover:text-emerald-800">Terms of Service</Link></li>
+              <li><Link to="/legal/privacy" className="hover:text-emerald-800">Privacy Policy</Link></li>
+              <li><a href="mailto:security@vetaura.ai" className="hover:text-emerald-800">Request DPA / SCCs</a></li>
             </ul>
           </div>
           <div>
@@ -63,6 +77,7 @@ export default function MarketingShell({ children }) {
             <ul className="space-y-1.5 text-slate-700">
               <li><Link to="/demo" className="hover:text-emerald-800">Book a demo</Link></li>
               <li><a href="mailto:hello@vetaura.ai" className="hover:text-emerald-800">Contact</a></li>
+              <li><a href="mailto:security@vetaura.ai" className="hover:text-emerald-800">Security</a></li>
             </ul>
           </div>
           <div>
