@@ -25,8 +25,8 @@ export default function PhoneSms() {
       setStatus(s.data);
       setUsage(u.data);
       setOverage(o.data);
-    } catch (e) {
-      // ignore
+    } catch (err) {
+      console.warn("Phone/SMS load failed:", err);
     }
   }
   useEffect(() => { load(); }, []);

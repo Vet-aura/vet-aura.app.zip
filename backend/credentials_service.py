@@ -133,11 +133,12 @@ def build_credentials_routes(db: AsyncIOMotorDatabase, auth_dep):
     @router.post("/twilio")
     async def set_twilio(req: TwilioCredsReq, user=Depends(auth_dep)):
         # Validate live by fetching the account via the API Key auth.
+        friendly: str = ""
         try:
             from twilio.rest import Client
             client = Client(req.api_key_sid, req.api_key_secret, req.account_sid)
             acct = client.api.accounts(req.account_sid).fetch()
-            friendly = acct.friendly_name
+            friendly = acct.friendly_name or ""
             # If a messaging service SID is provided, verify it exists on this account
             if req.messaging_service_sid:
                 try:
@@ -152,6 +153,7 @@ def build_credentials_routes(db: AsyncIOMotorDatabase, auth_dep):
         now = datetime.now(timezone.utc).isoformat()
         existing = await db.twilio_credentials.find_one({"clinic_id": user["clinic_id"]}, {"webhook_token": 1})
         webhook_token = (existing or {}).get("webhook_token") or secrets.token_urlsafe(32)
+        friendly_out = friendly
         await db.twilio_credentials.update_one(
             {"clinic_id": user["clinic_id"]},
             {"$set": {
@@ -160,14 +162,14 @@ def build_credentials_routes(db: AsyncIOMotorDatabase, auth_dep):
                 "api_key_sid": req.api_key_sid,
                 "api_key_secret_encrypted": encrypt(req.api_key_secret),
                 "messaging_service_sid": req.messaging_service_sid,
-                "friendly_name": friendly,
+                "friendly_name": friendly_out,
                 "webhook_token": webhook_token,
                 "updated_at": now,
                 "verified_at": now,
             }},
             upsert=True,
         )
-        return {"ok": True, "friendly_name": friendly, "webhook_token": webhook_token, "verified_at": now}
+        return {"ok": True, "friendly_name": friendly_out, "webhook_token": webhook_token, "verified_at": now}
 
     @router.post("/twilio/rotate-webhook-token")
     async def rotate_webhook_token(user=Depends(auth_dep)):

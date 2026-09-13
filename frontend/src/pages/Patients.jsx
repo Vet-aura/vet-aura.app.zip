@@ -70,7 +70,7 @@ export default function Patients() {
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {(p.active_problems || []).slice(0, 3).map((prob, i) => (
-                  <Badge key={i} variant="outline" className="text-[10px] border-emerald-200 text-emerald-800 bg-emerald-50">{prob}</Badge>
+                  <Badge key={`${i}-${prob}`} variant="outline" className="text-[10px] border-emerald-200 text-emerald-800 bg-emerald-50">{prob}</Badge>
                 ))}
               </div>
               <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">

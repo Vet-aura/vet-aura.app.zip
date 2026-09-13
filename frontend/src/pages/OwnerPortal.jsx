@@ -57,7 +57,7 @@ export default function OwnerPortal() {
             <div className="text-[10px] uppercase tracking-widest font-semibold flex items-center gap-1" style={{ color: primary }}><Pill className="h-3 w-3" /> Medications</div>
             <div className="mt-3 space-y-2">
               {c.medications.map((m, i) => (
-                <div key={i} className="p-3 rounded-xl border" style={{ borderColor: primary + "33", background: primary + "0f" }}>
+                <div key={`${i}-${m.name}`} className="p-3 rounded-xl border" style={{ borderColor: primary + "33", background: primary + "0f" }}>
                   <div className="font-semibold" style={{ color: primary }}>{m.name}</div>
                   <div className="text-xs text-slate-600 font-mono-clinical">{m.dose} · {m.frequency}{m.duration ? ` · ${m.duration}` : ""}</div>
                   {m.notes && <div className="text-xs text-slate-600 mt-1">{m.notes}</div>}
@@ -71,7 +71,7 @@ export default function OwnerPortal() {
           <Card className="p-6 rounded-2xl border-emerald-100 bg-white shadow-sm">
             <div className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: primary }}>Home care</div>
             <ul className="mt-2 text-sm text-slate-700 space-y-1 list-disc list-inside">
-              {c.home_care.map((h, i) => <li key={i}>{h}</li>)}
+              {c.home_care.map((h, i) => <li key={`${i}-${h.slice(0,32)}`}>{h}</li>)}
             </ul>
           </Card>
         )}
@@ -80,7 +80,7 @@ export default function OwnerPortal() {
           <Card className="p-6 rounded-2xl border-amber-200 bg-amber-50">
             <div className="text-[10px] uppercase tracking-widest text-amber-900 font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Call the clinic immediately if…</div>
             <ul className="mt-2 text-sm text-amber-900 space-y-1 list-disc list-inside">
-              {c.warning_signs.map((w, i) => <li key={i}>{w}</li>)}
+              {c.warning_signs.map((w, i) => <li key={`${i}-${w.slice(0,32)}`}>{w}</li>)}
             </ul>
           </Card>
         )}

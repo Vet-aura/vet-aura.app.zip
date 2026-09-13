@@ -52,7 +52,7 @@ export default function PatientDetail() {
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {(p.active_problems || []).map((pr, i) => (
-                <Badge key={i} variant="outline" className="border-emerald-200 text-emerald-800 bg-emerald-50">{pr}</Badge>
+                <Badge key={`${i}-${pr}`} variant="outline" className="border-emerald-200 text-emerald-800 bg-emerald-50">{pr}</Badge>
               ))}
             </div>
           </div>
@@ -66,7 +66,7 @@ export default function PatientDetail() {
         {(p.alerts || []).length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
             {p.alerts.map((a, i) => (
-              <div key={i} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
+              <div key={`${i}-${a}`} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
                 <AlertTriangle className="h-3 w-3" /> {a}
               </div>
             ))}

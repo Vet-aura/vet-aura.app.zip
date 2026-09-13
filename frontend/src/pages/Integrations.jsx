@@ -27,7 +27,7 @@ export default function Integrations() {
     try {
       const [t, e] = await Promise.all([api.get("/integrations/twilio"), api.get("/integrations/email")]);
       setTw(t.data); setEm(e.data);
-    } catch (e) { /* ignore */ }
+    } catch (err) { console.warn("Integrations load failed:", err); }
   }
   useEffect(() => { load(); }, []);
 

@@ -414,10 +414,12 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep,
                 to=req.phone_e164,
                 body=body,
             )
+            await _log_usage(cid, "sms", metadata={"to": req.phone_e164, "sid": msg.sid, "type": req.message_type})
+            return {"ok": True, "sid": msg.sid, "status": msg.status}
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(500, f"Twilio send failed: {e}")
-        await _log_usage(cid, "sms", metadata={"to": req.phone_e164, "sid": msg.sid, "type": req.message_type})
-        return {"ok": True, "sid": msg.sid, "status": msg.status}
 
     @router.get("/usage")
     async def usage(user=Depends(auth_dep)):

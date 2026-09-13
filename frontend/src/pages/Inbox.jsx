@@ -51,7 +51,8 @@ export default function Inbox() {
   async function load() {
     const { data } = await api.get("/messages");
     setMsgs(data);
-    if (data.length && !sel) setSel(data[0]);
+    // Use functional setter so we read the FRESH selection, not the closure snapshot.
+    if (data.length) setSel((current) => current || data[0]);
   }
 
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);

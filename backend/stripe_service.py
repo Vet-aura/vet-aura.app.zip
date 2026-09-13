@@ -199,6 +199,7 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
         )
 
         tax_mode = get_tax_mode()
+        session = None
         try:
             if tax_mode == "full":
                 try:
@@ -213,6 +214,9 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
                 session = stripe.checkout.Session.create(**kwargs, automatic_tax={"enabled": True}, billing_address_collection="required")
         except stripe.error.StripeError as e:
             logger.error(f"Stripe checkout error: {e}")
+            raise HTTPException(500, "Stripe checkout error")
+
+        if session is None:
             raise HTTPException(500, "Stripe checkout error")
 
         await db.payment_transactions.insert_one({
@@ -267,6 +271,7 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
             kwargs["discounts"] = [{"coupon": BUNDLE_COUPON_ID}]
 
         tax_mode = get_tax_mode()
+        session = None
         try:
             if tax_mode == "full":
                 try:
@@ -281,6 +286,9 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
                 session = stripe.checkout.Session.create(**kwargs, automatic_tax={"enabled": True}, billing_address_collection="required")
         except stripe.error.StripeError as e:
             logger.error(f"Stripe bundle checkout error: {e}")
+            raise HTTPException(500, "Stripe checkout error")
+
+        if session is None:
             raise HTTPException(500, "Stripe checkout error")
 
         await db.payment_transactions.insert_one({

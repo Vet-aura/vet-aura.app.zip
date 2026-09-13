@@ -13,7 +13,11 @@ export function AuthProvider({ children }) {
       if (stored) setAuthToken(stored);
       const { data } = await api.get("/auth/me");
       setUser(data);
-    } catch {
+    } catch (err) {
+      // Auth check failed — likely no token or session expired. Clear state and continue.
+      if (err?.response?.status && err.response.status !== 401) {
+        console.warn("Auth check failed:", err?.response?.status || err?.message);
+      }
       setUser(null);
       setAuthToken(null);
     } finally {
@@ -48,7 +52,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    try { await api.post("/auth/logout"); } catch {}
+    try { await api.post("/auth/logout"); } catch (err) { console.debug("logout call ignored:", err?.message); }
     localStorage.removeItem("vetaura_token");
     setAuthToken(null);
     setUser(null);

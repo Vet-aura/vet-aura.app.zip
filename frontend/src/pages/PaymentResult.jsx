@@ -26,7 +26,10 @@ export default function PaymentResult({ mode }) {
             setStatus("paid");
             return;
           }
-        } catch {}
+        } catch (err) {
+          // transient — payment webhook may not have landed yet; log and keep polling
+          console.debug("payment status poll:", err?.response?.status || err?.message);
+        }
         tries += 1;
         await new Promise((r) => setTimeout(r, 2000));
       }

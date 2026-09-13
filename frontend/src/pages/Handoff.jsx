@@ -52,7 +52,7 @@ export default function Handoff() {
             <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-3">Hospitalized patients</div>
             <div className="space-y-2">
               {(result.hospitalized_patients || []).map((p, i) => (
-                <div key={i} className="p-3 rounded-xl border border-slate-100" data-testid={`handoff-pt-${i}`}>
+                <div key={`${i}-${p.name}`} className="p-3 rounded-xl border border-slate-100" data-testid={`handoff-pt-${i}`}>
                   <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                     <div className="font-semibold text-slate-900">{p.name}</div>
                     <Badge className={`text-[10px] border ${statusStyle[p.status] || "bg-slate-100 text-slate-700 border-slate-200"}`}>{p.status}</Badge>
@@ -69,19 +69,19 @@ export default function Handoff() {
             <Card className="p-5 rounded-2xl border-emerald-100 bg-white shadow-sm">
               <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-2">Pending labs</div>
               <ul className="text-sm text-slate-700 space-y-1 list-disc list-inside">
-                {(result.pending_labs || []).map((l, i) => <li key={i}>{l}</li>)}
+                {(result.pending_labs || []).map((l, i) => <li key={`${i}-${String(l).slice(0,32)}`}>{l}</li>)}
               </ul>
             </Card>
             <Card className="p-5 rounded-2xl border-emerald-100 bg-white shadow-sm">
               <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-2">Owner concerns</div>
               <ul className="text-sm text-slate-700 space-y-1 list-disc list-inside">
-                {(result.owner_concerns || []).map((c, i) => <li key={i}>{c}</li>)}
+                {(result.owner_concerns || []).map((c, i) => <li key={`${i}-${String(c).slice(0,32)}`}>{c}</li>)}
               </ul>
             </Card>
             <Card className="p-5 rounded-2xl border-emerald-100 bg-white shadow-sm">
               <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-2">Priority tasks</div>
               <ul className="text-sm text-slate-700 space-y-1 list-disc list-inside">
-                {(result.priority_tasks || []).map((t, i) => <li key={i}>{t}</li>)}
+                {(result.priority_tasks || []).map((t, i) => <li key={`${i}-${String(t).slice(0,32)}`}>{t}</li>)}
               </ul>
             </Card>
           </div>

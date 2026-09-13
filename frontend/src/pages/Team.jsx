@@ -27,7 +27,7 @@ export default function Team() {
     try {
       const [m, i] = await Promise.all([api.get("/team/members"), api.get("/team/invitations")]);
       setMembers(m.data); setInvites(i.data);
-    } catch (e) { /* ignore */ }
+    } catch (err) { console.warn("Team load failed:", err); }
   }
   useEffect(() => { load(); }, []);
 
