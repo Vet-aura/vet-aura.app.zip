@@ -1062,10 +1062,21 @@ app.include_router(build_invitation_routes(db, auth_dep, lambda: os.environ.get(
 app.include_router(build_public_invite_routes(db))
 app.include_router(build_billing_cycle_routes(db, auth_dep))
 
+# CORS — never combine wildcard origin with credentials. If CORS_ORIGINS="*" we drop
+# credentials to avoid reflecting arbitrary origins with cookies (SEC-003). In production
+# you should set CORS_ORIGINS to an explicit comma-separated allowlist.
+_cors_raw = os.environ.get("CORS_ORIGINS", "*").strip()
+_cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+_allow_credentials = True
+if _cors_origins == ["*"] or "*" in _cors_origins:
+    logger.warning("CORS_ORIGINS is wildcard — disabling allow_credentials. Set an explicit allowlist for production.")
+    _cors_origins = ["*"]
+    _allow_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_credentials=_allow_credentials,
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

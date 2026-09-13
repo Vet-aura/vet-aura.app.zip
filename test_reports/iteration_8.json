@@ -1,0 +1,44 @@
+{
+  "summary": "Iter-8 security hardening tested end-to-end. Wrote /app/backend/tests/test_iter8_security.py covering SEC-001 SSRF (7 blocked variants + legit URL regression), SEC-002 voicemail host allowlist (DB-verified: attacker recording URL results in fallback body, no fetch attempted), SEC-003 CORS wildcard/credentials guard (OPTIONS preflight from attacker origin: ACAC != true), SEC-004 Twilio signature validation (a: fall-open when no auth_token; b: reject when auth_token set & no signature — verified no consent transition recorded; c: valid signature acceptance — FAILS due to real backend proxy-URL bug), plus regression checks (plans, login, scribe templates, sms compliance profile) and frontend smoke on /roi, /app/inbox, /app/team, /app/integrations (0 console errors). 21/22 pytest tests pass. The single failure surfaces a real production bug in signature validation.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/twilio/sms/inbound/{clinic_id}/{token} (and voice/gather/voicemail/status)",
+        "issue": "SEC-004 signature validation calls RequestValidator.validate(str(request.url), ...). Behind the kubernetes ingress, request.url = 'http://pet-care-helper-1.cluster-2.preview.emergentcf.cloud/...' — different scheme AND host from the public Twilio-facing URL 'https://pet-care-helper-1.preview.emergentagent.com/...'. Result: every legitimate Twilio POST with a valid signature will fail validation and return 'This number is not configured', effectively disabling all inbound Twilio traffic for any clinic that supplies an auth_token. Confirmed via DIAG log: url='http://pet-care-helper-1.cluster-2.preview.emergentcf.cloud/api/twilio/sms/inbound/...' — signature signed against the https public URL is rejected.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter8_security.py",
+    "/app/test_reports/pytest/iter8_results.xml"
+  ],
+  "action_items": [
+    "SEC-004 URL reconstruction: in twilio_service._validate_twilio_signature (and/or add a global ProxyHeadersMiddleware), rebuild the URL Twilio would have signed using X-Forwarded-Proto + X-Forwarded-Host (or the Host header) before calling RequestValidator.validate. Suggested minimal patch: fwd_proto = request.headers.get('x-forwarded-proto') or request.url.scheme; fwd_host = request.headers.get('x-forwarded-host') or request.headers.get('host') or request.url.netloc; signed_url = f\"{fwd_proto}://{fwd_host}{request.url.path}\" (append '?' + query if present). Alternative: run uvicorn with --proxy-headers --forwarded-allow-ips='*' so str(request.url) already reflects the public https URL. Retest test_c after the fix.",
+    "Once fixed, main agent can also verify signature validation logs (currently there's a helpful 'Rejected inbound webhook — invalid signature' warning — keep it)."
+  ],
+  "critical_code_review_comments": [
+    "twilio_service._validate_twilio_signature: str(request.url) is unsafe behind a reverse proxy — see CRITICAL above. This is the sole blocker.",
+    "credentials_service.set_twilio: 'signature_validation' flag correctly returns bool(req.auth_token). Good.",
+    "tryit_service._safe_public_fetch: manual redirect loop with per-hop _assert_url_public is correct SSRF hardening — 7 attack variants blocked. Nice.",
+    "twilio_service.voice_voicemail: host allowlist {api.twilio.com} correctly rejects attacker.example.com; log warning is emitted; DB message falls back to 'Voicemail recording: <url>' (verified).",
+    "server.py CORS: correctly forces allow_credentials=False when CORS_ORIGINS='*'. Verified via preflight — no ACAC:true header returned to attacker origin.",
+    "credentials_service.get_twilio_creds swallows decrypt exceptions and returns None. This is graceful for corrupted-ciphertext scenarios, but it means the caller cannot distinguish 'no creds' from 'corrupt creds' — consider logging at WARNING level when this happens so operators notice."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter8_security.py (new)"
+  ],
+  "success_rate": {"backend": "95% (21/22)", "frontend": "100% (4/4 pages, 0 console errors)"},
+  "test_credentials": "vet1@example.com / strongpass123 (used for regression). Seeded clinic_iter8_sec + clinic_iter8_sec_vm via motor for signature/voicemail tests; auto-cleaned by tests.",
+  "seed_data_creation": "Tests seed twilio_credentials + twilio_numbers + clinics rows for clinic_iter8_sec and clinic_iter8_sec_vm and clean them up in module teardown. No lasting side effects.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Rerun: `cd /app/backend && export $(grep -v '^#' .env | xargs) && cd tests && pytest test_iter8_security.py -v`. Expect 22/22 once main agent fixes the request.url proxy-header issue in _validate_twilio_signature. The pytest.ini pins -n 2 --dist loadscope so classes are pinned to workers — do NOT change. SEC-002 test needs its own clinic_id (CLINIC_TEST_ID_VM) to avoid parallel-race with SEC-004 tests; that's already handled. If you extend, use a new unique clinic_id per class.",
+  "rca of the issue": "SEC-004c failing signature validation — RCA: FastAPI's request.url reflects the socket-level scheme/host uvicorn is bound to (0.0.0.0:8001 → internal cluster hostname over HTTP). The kubernetes ingress terminates TLS and rewrites Host, so Twilio (or our test) sign the URL 'https://pet-care-helper-1.preview.emergentagent.com/...' while the backend validates against 'http://pet-care-helper-1.cluster-2.preview.emergentcf.cloud/...'. HMAC-SHA1 of two different strings never match. Reproduction: temporarily add `logger.warning(f'url={str(request.url)!r}')` inside _validate_twilio_signature, POST any signed request, and observe the internal URL in /var/log/supervisor/backend.err.log. Mitigation options: (1) reconstruct URL from X-Forwarded-Proto + X-Forwarded-Host headers before validating; (2) add starlette's ProxyHeadersMiddleware or run uvicorn with --proxy-headers --forwarded-allow-ips='*'. Option (1) is safer because it doesn't trust upstream headers globally — validate them only inside the signature check where a mismatch is caller-controlled anyway."
+}

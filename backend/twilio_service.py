@@ -39,6 +39,48 @@ logger = logging.getLogger(__name__)
 TWILIO_VOICE_WEBHOOK_BASE = os.environ.get("PUBLIC_APP_URL", "")
 
 
+def _public_url_for_signature(request: Request) -> str:
+    """Reconstruct the URL Twilio would have signed, using X-Forwarded-Proto/Host from the
+    proxy. Twilio signs the PUBLIC URL, not the internal container URL FastAPI sees."""
+    fwd_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    fwd_host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    path = request.url.path
+    q = request.url.query
+    return f"{fwd_proto}://{fwd_host}{path}" + (f"?{q}" if q else "")
+
+
+def _validate_twilio_signature(request: Request, form: dict, auth_token: str) -> bool:
+    """Validate X-Twilio-Signature. Returns True if signature is valid OR if the clinic
+    has not stored an auth_token (best-effort — path token still gates the request)."""
+    if not auth_token:
+        return True  # Path token is the gate when clinic didn't supply an auth token.
+    sig = request.headers.get("X-Twilio-Signature", "")
+    if not sig:
+        return False
+    try:
+        from twilio.request_validator import RequestValidator
+        validator = RequestValidator(auth_token)
+        return validator.validate(_public_url_for_signature(request), form, sig)
+    except Exception as e:
+        logger.warning(f"Twilio signature validator failed: {e}")
+        return False
+
+
+TWILIO_RECORDING_HOSTS = {"api.twilio.com"}
+
+
+def _is_twilio_recording_url(url: str) -> bool:
+    from urllib.parse import urlparse
+    try:
+        p = urlparse(url)
+    except Exception:
+        return False
+    if p.scheme != "https":
+        return False
+    host = (p.hostname or "").lower()
+    return host in TWILIO_RECORDING_HOSTS
+
+
 def _twiml(body: str) -> Response:
     xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<Response>{body}</Response>'
     return Response(content=xml, media_type="application/xml")
@@ -78,11 +120,16 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep,
             "at": datetime.now(timezone.utc).isoformat(),
         })
 
-    async def _load_ctx(clinic_id: str, webhook_token: str, form: dict) -> Optional[dict]:
-        """Validate token and return {creds, binding, cfg} for the request."""
+    async def _load_ctx(clinic_id: str, webhook_token: str, form: dict, request: Optional[Request] = None) -> Optional[dict]:
+        """Validate token, optional Twilio signature, and return {creds, binding, cfg}."""
         creds = await get_twilio_creds_by_token(db, clinic_id, webhook_token)
         if not creds:
             return None
+        # Enforce X-Twilio-Signature if the clinic has provided an auth token.
+        if request is not None and creds.get("auth_token"):
+            if not _validate_twilio_signature(request, form, creds["auth_token"]):
+                logger.warning(f"Rejected inbound webhook — invalid signature for clinic {clinic_id}")
+                return None
         to_number = form.get("To", "")
         binding = await db.twilio_numbers.find_one({"clinic_id": clinic_id, "phone_number": to_number}, {"_id": 0})
         if not binding:
@@ -94,7 +141,7 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep,
     @router.post("/voice/inbound/{clinic_id}/{webhook_token}")
     async def voice_inbound(clinic_id: str, webhook_token: str, request: Request):
         form = dict(await request.form())
-        ctx = await _load_ctx(clinic_id, webhook_token, form)
+        ctx = await _load_ctx(clinic_id, webhook_token, form, request)
         if not ctx:
             return _twiml('<Say voice="alice">This number is not configured. Goodbye.</Say><Hangup/>')
 
@@ -128,7 +175,7 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep,
     @router.post("/voice/gather/{clinic_id}/{webhook_token}")
     async def voice_gather(clinic_id: str, webhook_token: str, request: Request):
         form = dict(await request.form())
-        ctx = await _load_ctx(clinic_id, webhook_token, form)
+        ctx = await _load_ctx(clinic_id, webhook_token, form, request)
         if not ctx:
             return _twiml('<Hangup/>')
         cfg = ctx["cfg"]
@@ -177,7 +224,7 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep,
     @router.post("/voice/voicemail/{clinic_id}/{webhook_token}")
     async def voice_voicemail(clinic_id: str, webhook_token: str, request: Request):
         form = dict(await request.form())
-        ctx = await _load_ctx(clinic_id, webhook_token, form)
+        ctx = await _load_ctx(clinic_id, webhook_token, form, request)
         if not ctx:
             return _twiml('<Hangup/>')
         call_sid = form.get("CallSid", "")
@@ -186,15 +233,18 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep,
 
         transcript_text = ""
         try:
-            if recording_url:
+            # SSRF guard: only fetch recordings from api.twilio.com. Never send the clinic's
+            # API-Key credentials to an attacker-supplied host.
+            if recording_url and _is_twilio_recording_url(recording_url):
                 import httpx, base64
                 creds = ctx["creds"]
-                # Twilio recordings need auth; use API Key SID + Secret
                 auth = base64.b64encode(f"{creds['api_key_sid']}:{creds['api_key_secret']}".encode()).decode()
-                async with httpx.AsyncClient(timeout=30) as c:
+                async with httpx.AsyncClient(timeout=30, follow_redirects=False) as c:
                     r = await c.get(recording_url + ".mp3", headers={"Authorization": f"Basic {auth}"})
                     if r.status_code == 200:
                         transcript_text = await transcribe_audio_fn(r.content, filename="voicemail.mp3")
+            elif recording_url:
+                logger.warning(f"Voicemail recording URL rejected (non-Twilio host): {recording_url[:100]}")
         except Exception as e:
             logger.warning(f"Voicemail transcription failed: {e}")
 
@@ -219,7 +269,7 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep,
     @router.post("/voice/status/{clinic_id}/{webhook_token}")
     async def voice_status(clinic_id: str, webhook_token: str, request: Request):
         form = dict(await request.form())
-        ctx = await _load_ctx(clinic_id, webhook_token, form)
+        ctx = await _load_ctx(clinic_id, webhook_token, form, request)
         if not ctx:
             return {"ok": False}
         call_sid = form.get("CallSid", "")
@@ -232,7 +282,7 @@ def build_twilio_routes(db: AsyncIOMotorDatabase, auth_dep,
     @router.post("/sms/inbound/{clinic_id}/{webhook_token}")
     async def sms_inbound(clinic_id: str, webhook_token: str, request: Request):
         form = dict(await request.form())
-        ctx = await _load_ctx(clinic_id, webhook_token, form)
+        ctx = await _load_ctx(clinic_id, webhook_token, form, request)
         if not ctx:
             return _twiml('<Message>This number is not configured.</Message>')
         cfg = ctx["cfg"]

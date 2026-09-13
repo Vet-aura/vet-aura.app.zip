@@ -1,0 +1,31 @@
+{
+  "summary": "Iter-9 retest of Twilio X-Twilio-Signature validation after the `_public_url_for_signature` fix in twilio_service.py. Extended /app/backend/tests/test_iter8_security.py::TestSEC004_Signature: (a) fall-open with no auth_token, (b) reject when auth_token set + no signature (no consent transition recorded), (c) accept when a valid signature is computed against the PUBLIC URL (REACT_APP_BACKEND_URL) — this was the sole failure in iter-8 and is now GREEN; also verified that a STOP body creates a fresh opt-out row in db.consent_events. (d) NEW negative check: valid signature computed for a DIFFERENT URL (?foo=bar appended) is refused and no consent event is recorded — confirms the validator is actually verifying, not accepting anything. All 5 tests pass in 3.97s.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter8_security.py",
+    "/app/test_reports/pytest/iter9_sec004.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "twilio_service._public_url_for_signature correctly rebuilds URL from X-Forwarded-Proto/Host with sensible fallbacks to request.url.scheme/netloc. Trust is scoped to signature validation only (not global proxy-header middleware) which is the safer choice.",
+    "Note: the helper does not lowercase the forwarded host. If an upstream proxy ever sent a mixed-case Host, Twilio's canonical signing (which uses whatever URL was configured in the Twilio console) would still match because it's a byte-for-byte compare of the URL string. Non-issue in practice but worth remembering."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter8_security.py (added SEC-004d + strengthened SEC-004c to assert consent_events opt-out row on STOP)"
+  ],
+  "success_rate": {"backend": "100% (5/5 SEC-004 assertions)", "frontend": "n/a (backend-only retest)"},
+  "test_credentials": "vet1@example.com / strongpass123 (login regression only, not needed for SEC-004 path). Seeded clinic_iter8_sec with auth_token_encrypted=crypto_service.encrypt('fake_at_for_test_only') and phone +15550000000 via motor; auto-cleaned between subtests and in test_cleanup.",
+  "seed_data_creation": "twilio_credentials + twilio_numbers + clinics for clinic_iter8_sec, plus per-subtest ephemeral consent_events. All removed by _cleanup() before/after each test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "SEC-004 is fully green. To rerun: `cd /app/backend && export $(grep -v '^#' .env | xargs) && cd tests && pytest test_iter8_security.py::TestSEC004_Signature -v`. If you want the full iter-8 suite: `pytest test_iter8_security.py -v` (should now be 23/23).",
+  "rca of the issue": "Iter-8 SEC-004c failure RCA: FastAPI's `request.url` reflected the internal uvicorn socket (http://<cluster-hostname>) whereas Twilio signs the public https URL. Fix landed in twilio_service._public_url_for_signature which reads X-Forwarded-Proto + X-Forwarded-Host from the ingress and reconstructs `<proto>://<host><path>[?<query>]`. Confirmed via tests: (c) signature for the public URL now validates; (d) signature for a wrong URL still fails, proving verification is active."
+}

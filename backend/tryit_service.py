@@ -6,11 +6,17 @@ spins up an ephemeral demo clinic (expires in 24h), and returns a receptionist w
 from __future__ import annotations
 import re
 import uuid
+import socket
+import ipaddress
+import logging
+from urllib.parse import urlparse
 import httpx
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, HttpUrl
 from motor.motor_asyncio import AsyncIOMotorDatabase
+
+logger = logging.getLogger(__name__)
 
 
 PHONE_RE = re.compile(r"(?:\+?1[\s.\-]?)?\(?\b\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}\b")
@@ -95,12 +101,16 @@ def _extract_address(text: str) -> str:
 
 
 async def scrape_clinic(url: str) -> dict:
-    """Fetch and parse public clinic site. Returns extracted profile."""
+    """Fetch and parse public clinic site. Returns extracted profile.
+
+    SSRF hardening: resolve host, reject private/loopback/link-local/metadata ranges
+    BEFORE the request; also re-validate after any redirect. Only http/https, only
+    ports 80/443, size-capped response.
+    """
     try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers={"User-Agent": "VetauraBot/1.0"}) as c:
-            r = await c.get(url)
-            r.raise_for_status()
-            html = r.text
+        html = await _safe_public_fetch(url)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(400, f"Could not load {url}: {e}")
 
@@ -120,6 +130,85 @@ async def scrape_clinic(url: str) -> dict:
         "source_url": url,
     }
     return profile
+
+
+def _is_public_ip(host: str) -> bool:
+    """Resolve host and confirm ALL resolved addresses are globally routable public IPs."""
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except Exception:
+        return False
+    for info in infos:
+        sockaddr = info[4]
+        ip_str = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return False
+        # Reject: private, loopback, link-local (169.254/16 incl. cloud metadata 169.254.169.254),
+        # multicast, reserved, unspecified, and site-local IPv6.
+        if (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
+                or ip.is_reserved or ip.is_unspecified):
+            return False
+        # extra guard: known cloud metadata endpoints (belt and braces)
+        if str(ip) in {"169.254.169.254", "fd00:ec2::254", "100.100.100.200"}:
+            return False
+    return True
+
+
+def _assert_url_public(url: str):
+    """Reject non-http(s) schemes, non-standard ports, and any private-network host."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(400, "Only http(s) URLs are supported.")
+    host = parsed.hostname or ""
+    if not host:
+        raise HTTPException(400, "URL is missing a host.")
+    port = parsed.port
+    if port and port not in (80, 443):
+        raise HTTPException(400, "Only standard http(s) ports 80/443 are supported.")
+    if host.lower() in {"localhost", "metadata.google.internal", "metadata"}:
+        raise HTTPException(400, "That host is not permitted.")
+    # If host is a literal IP, validate directly.
+    try:
+        ip = ipaddress.ip_address(host)
+        if (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
+                or ip.is_reserved or ip.is_unspecified):
+            raise HTTPException(400, "That address range is not permitted.")
+    except ValueError:
+        # host is a name — resolve it
+        if not _is_public_ip(host):
+            raise HTTPException(400, "Host resolves to a non-public address and cannot be fetched.")
+
+
+async def _safe_public_fetch(url: str, max_redirects: int = 5, max_bytes: int = 3 * 1024 * 1024) -> str:
+    """SSRF-safe fetcher. Manual redirect loop with per-hop host validation.
+
+    Manual redirect handling is essential — httpx's automatic redirect would follow
+    to a public 302 that then points at 169.254.169.254 without re-validating.
+    """
+    current = url
+    for _ in range(max_redirects + 1):
+        _assert_url_public(current)
+        async with httpx.AsyncClient(timeout=15, follow_redirects=False,
+                                     headers={"User-Agent": "VetauraBot/1.0"}) as c:
+            r = await c.get(current)
+        if r.status_code in (301, 302, 303, 307, 308):
+            loc = r.headers.get("location")
+            if not loc:
+                raise HTTPException(400, "Redirect with no Location header.")
+            # Relative or absolute — resolve against current.
+            current = str(httpx.URL(current).join(loc))
+            continue
+        if r.status_code >= 400:
+            raise HTTPException(400, f"Upstream returned HTTP {r.status_code}.")
+        # cap body size
+        content = r.content[:max_bytes]
+        try:
+            return content.decode(r.encoding or "utf-8", errors="replace")
+        except Exception:
+            return content.decode("utf-8", errors="replace")
+    raise HTTPException(400, "Too many redirects.")
 
 
 def build_tryit_routes(db: AsyncIOMotorDatabase):

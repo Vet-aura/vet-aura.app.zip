@@ -36,6 +36,10 @@ class TwilioCredsReq(BaseModel):
     api_key_sid: str = Field(min_length=34, max_length=34, pattern=r"^SK[0-9a-fA-F]{32}$")
     api_key_secret: str = Field(min_length=10, max_length=128)
     messaging_service_sid: Optional[str] = None
+    # Optional: clinic's Auth Token used ONLY for validating X-Twilio-Signature on inbound
+    # webhooks. Never used for outbound API calls (those use the restricted API Key). Storing
+    # the Auth Token is optional but strongly recommended for signature verification.
+    auth_token: Optional[str] = Field(default=None, max_length=128)
 
     @field_validator("messaging_service_sid")
     @classmethod
@@ -53,6 +57,8 @@ async def get_twilio_creds(db: AsyncIOMotorDatabase, clinic_id: str) -> Optional
         return None
     try:
         api_key_secret = decrypt(doc.get("api_key_secret_encrypted", ""))
+        auth_token_enc = doc.get("auth_token_encrypted", "")
+        auth_token = decrypt(auth_token_enc) if auth_token_enc else ""
     except Exception:
         # Corrupt ciphertext (e.g. rotated encryption key or legacy seed) — treat as
         # unconfigured so webhooks return a graceful "not configured" response instead
@@ -63,6 +69,7 @@ async def get_twilio_creds(db: AsyncIOMotorDatabase, clinic_id: str) -> Optional
         "account_sid": doc["account_sid"],
         "api_key_sid": doc["api_key_sid"],
         "api_key_secret": api_key_secret,
+        "auth_token": auth_token,
         "messaging_service_sid": doc.get("messaging_service_sid"),
         "webhook_token": doc.get("webhook_token"),
         "friendly_name": doc.get("friendly_name"),
@@ -161,6 +168,7 @@ def build_credentials_routes(db: AsyncIOMotorDatabase, auth_dep):
                 "account_sid": req.account_sid,
                 "api_key_sid": req.api_key_sid,
                 "api_key_secret_encrypted": encrypt(req.api_key_secret),
+                "auth_token_encrypted": encrypt(req.auth_token) if req.auth_token else "",
                 "messaging_service_sid": req.messaging_service_sid,
                 "friendly_name": friendly_out,
                 "webhook_token": webhook_token,
@@ -169,7 +177,8 @@ def build_credentials_routes(db: AsyncIOMotorDatabase, auth_dep):
             }},
             upsert=True,
         )
-        return {"ok": True, "friendly_name": friendly_out, "webhook_token": webhook_token, "verified_at": now}
+        return {"ok": True, "friendly_name": friendly_out, "webhook_token": webhook_token,
+                "verified_at": now, "signature_validation": bool(req.auth_token)}
 
     @router.post("/twilio/rotate-webhook-token")
     async def rotate_webhook_token(user=Depends(auth_dep)):
