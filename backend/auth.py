@@ -149,10 +149,14 @@ def make_auth_dep(db: AsyncIOMotorDatabase):
 
 
 # ---------- Routes ----------
-def build_auth_routes(db: AsyncIOMotorDatabase):
+def build_auth_routes(db: AsyncIOMotorDatabase, guard):
     @auth_router.post("/signup")
-    async def signup(req: SignupReq, response: Response):
-        if await db.users.find_one({"email": req.email.lower()}):
+    async def signup(req: SignupReq, request: Request):
+        email = req.email.lower()
+        await guard.check(email, request, "signup")
+        await guard.record_attempt(email, request, "signup")
+        if await db.users.find_one({"email": email}):
+            await guard.audit("signup_failed", email, request, reason="email_exists")
             raise HTTPException(400, "Email already registered")
 
         # Invite flow: attach to existing clinic
@@ -198,14 +202,19 @@ def build_auth_routes(db: AsyncIOMotorDatabase):
                           "accepted_by_user_id": user["user_id"]}},
             )
 
+        await guard.audit("signup_success", email, request, user)
         token = _issue_jwt(user["user_id"])
         return {"token": token, "user": {**{k: user[k] for k in ("user_id", "clinic_id", "email", "name", "role", "picture")}, "clinic": clinic}}
 
     @auth_router.post("/login")
-    async def login(req: LoginReq):
-        user = await db.users.find_one({"email": req.email.lower()}, {"_id": 0})
+    async def login(req: LoginReq, request: Request):
+        email = req.email.lower()
+        await guard.check(email, request, "login")
+        user = await db.users.find_one({"email": email}, {"_id": 0})
         if not user or not user.get("password_hash") or not _verify(req.password, user["password_hash"]):
+            await guard.record_login_failure(email, request, user)
             raise HTTPException(401, "Invalid credentials")
+        await guard.record_login_success(email, request, user)
         clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
         token = _issue_jwt(user["user_id"])
         return {"token": token, "user": {**{k: user.get(k) for k in ("user_id", "clinic_id", "email", "name", "role", "picture")}, "clinic": clinic}}

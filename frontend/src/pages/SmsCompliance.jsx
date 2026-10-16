@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ShieldCheck, ClipboardCheck, MessagesSquare, Ban, CircleCheck, AlertTriangle, Save, UserCheck } from "lucide-react";
 import { toast } from "sonner";
+import { QuietHoursCard } from "@/components/QuietHoursCard";
 
 const STATUS_LABELS = {
   ready: { label: "Ready to text", cls: "bg-emerald-100 text-emerald-800 border-emerald-200" },
@@ -109,6 +110,8 @@ export default function SmsCompliance() {
           ))}
         </div>
       </Card>
+
+      <QuietHoursCard profile={profile} saving={saving} onSave={save} />
 
       {/* Brand + Campaign attestation */}
       <div className="grid md:grid-cols-2 gap-4">

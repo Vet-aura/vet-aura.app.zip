@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Settings as SettingsIcon, Download } from "lucide-react";
 import { toast } from "sonner";
+import { SecurityAlertsCard } from "@/components/SecurityAlertsCard";
 
 export default function Settings() {
   const { user, refreshUser } = useAuth();
@@ -89,6 +90,8 @@ export default function Settings() {
           </Button>
         </div>
       </Card>
+
+      {(user?.role || "owner") === "owner" && <SecurityAlertsCard />}
 
       <Card className="p-6 rounded-2xl border-emerald-100 bg-white shadow-sm">
         <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-3">Data export</div>

@@ -30,7 +30,8 @@ export default function Signup() {
       toast.success(`Welcome, ${u.name.split(" ")[0]}. Your trial is active.`);
       navigate("/onboarding", { replace: true });
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Signup failed.");
+      const d = e.response?.data?.detail;
+      toast.error(typeof d === "string" ? d : "Signup failed. Check your details and try again.");
     } finally {
       setBusy(false);
     }

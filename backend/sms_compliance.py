@@ -30,10 +30,11 @@ clinics the operational tooling they need to run compliant SMS:
 from __future__ import annotations
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 
@@ -84,6 +85,32 @@ class ProfileReq(BaseModel):
     quiet_hours_start: Optional[str] = None  # "21:00"
     quiet_hours_end: Optional[str] = None    # "09:00"
     quiet_hours_tz: Optional[str] = None     # "America/Los_Angeles"
+    quiet_hours_enabled: Optional[bool] = None
+    quiet_days: Optional[list[int]] = None   # Python weekday: 0=Mon … 6=Sun
+
+    @field_validator("quiet_hours_start", "quiet_hours_end")
+    @classmethod
+    def _hhmm(cls, v):
+        if v is not None and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", v):
+            raise ValueError("Time must be HH:MM (24h)")
+        return v
+
+    @field_validator("quiet_hours_tz")
+    @classmethod
+    def _tz(cls, v):
+        if v is not None:
+            try:
+                ZoneInfo(v)
+            except Exception:
+                raise ValueError("Unknown timezone")
+        return v
+
+    @field_validator("quiet_days")
+    @classmethod
+    def _days(cls, v):
+        if v is not None and any(d not in range(7) for d in v):
+            raise ValueError("quiet_days must be integers 0 (Mon) to 6 (Sun)")
+        return sorted(set(v)) if v is not None else v
 
 
 class ConsentReq(BaseModel):
@@ -161,45 +188,44 @@ async def has_active_consent(db: AsyncIOMotorDatabase, clinic_id: str, phone: st
     return bool(doc and doc.get("status") == "opted_in")
 
 
+QUIET_DEFAULTS = {"quiet_hours_enabled": True, "quiet_hours_start": "21:00", "quiet_hours_end": "08:00",
+                  "quiet_hours_tz": "America/New_York", "quiet_days": [6]}
+
+
+def quiet_settings(profile: dict) -> dict:
+    return {k: (profile.get(k) if profile.get(k) is not None else d) for k, d in QUIET_DEFAULTS.items()}
+
+
+def _minutes(t: str) -> int:
+    hh, mm = t.split(":")
+    return int(hh) * 60 + int(mm)
+
+
 def _in_quiet_hours(profile: dict, now: Optional[datetime] = None) -> bool:
-    """True if `now` falls inside the clinic's quiet-hours window in the clinic's TZ.
-    Also treats Sundays as a quiet day for marketing by default."""
-    start = (profile.get("quiet_hours_start") or "").strip()
-    end = (profile.get("quiet_hours_end") or "").strip()
-    tz_name = (profile.get("quiet_hours_tz") or "America/Los_Angeles").strip()
-    now = now or datetime.now(timezone.utc)
-    try:
-        try:
-            from zoneinfo import ZoneInfo
-            local = now.astimezone(ZoneInfo(tz_name))
-        except Exception:
-            local = now
-    except Exception:
-        local = now
-    # Sundays are always quiet for marketing (industry hygiene). We express this by returning
-    # True on Sunday whenever a quiet-hours window is configured at all.
-    if local.weekday() == 6 and (start or end):
+    """True if `now` is inside the clinic's nightly window or on a clinic quiet day (local TZ)."""
+    q = quiet_settings(profile)
+    if not q["quiet_hours_enabled"]:
+        return False
+    local = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo(q["quiet_hours_tz"]))
+    if local.weekday() in q["quiet_days"]:
         return True
-    if not start or not end:
-        return False
-    def _parse(t: str):
-        try:
-            hh, mm = t.split(":")
-            return int(hh), int(mm)
-        except Exception:
-            return None
-    s = _parse(start); e = _parse(end)
-    if not s or not e:
-        return False
     cur = local.hour * 60 + local.minute
-    smin = s[0] * 60 + s[1]
-    emin = e[0] * 60 + e[1]
+    smin, emin = _minutes(q["quiet_hours_start"]), _minutes(q["quiet_hours_end"])
     if smin == emin:
         return False
     if smin < emin:
         return smin <= cur < emin
-    # window crosses midnight
     return cur >= smin or cur < emin
+
+
+def next_send_window(profile: dict, now: Optional[datetime] = None) -> Optional[datetime]:
+    """Earliest UTC time (5-min resolution, up to 8 days out) when marketing may send."""
+    t = (now or datetime.now(timezone.utc)).replace(second=0, microsecond=0)
+    for _ in range(8 * 24 * 12):
+        if not _in_quiet_hours(profile, t):
+            return t
+        t += timedelta(minutes=5)
+    return None
 
 
 def is_stop_message(body: str) -> bool:
@@ -295,6 +321,9 @@ def build_compliance_routes(db: AsyncIOMotorDatabase, auth_dep):
         doc["checklist_definitions"] = DEFAULT_CHECKLIST
         twilio_creds = await db.twilio_credentials.find_one({"clinic_id": cid}, {"_id": 0, "api_key_secret_encrypted": 0})
         doc["readiness"] = _readiness(doc, twilio_creds)
+        doc.update(quiet_settings(doc))
+        nxt = next_send_window(doc)
+        doc["quiet_status"] = {"active": _in_quiet_hours(doc), "next_send_at": nxt.isoformat() if nxt else None}
         return doc
 
     @router.patch("/profile")

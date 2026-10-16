@@ -39,6 +39,7 @@ import ReceptionistSettings from "@/pages/ReceptionistSettings";
 import ScribeTemplates from "@/pages/ScribeTemplates";
 import PhoneSms from "@/pages/PhoneSms";
 import Integrations from "@/pages/Integrations";
+import MarketingBlast from "@/pages/MarketingBlast";
 import SmsCompliance from "@/pages/SmsCompliance";
 import Team from "@/pages/Team";
 import InviteAccept from "@/pages/auth/InviteAccept";
@@ -90,6 +91,7 @@ function AppRouter() {
         <Route path="phone" element={<PhoneSms />} />
         <Route path="integrations" element={<Integrations />} />
         <Route path="compliance" element={<SmsCompliance />} />
+        <Route path="marketing" element={<MarketingBlast />} />
         <Route path="team" element={<Team />} />
         <Route path="patients" element={<Patients />} />
         <Route path="patients/:id" element={<PatientDetail />} />

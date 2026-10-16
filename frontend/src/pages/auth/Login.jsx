@@ -25,8 +25,10 @@ export default function Login() {
       const u = await login(email, password);
       toast.success(`Welcome back, ${u.name.split(" ")[0]}.`);
       navigate(u.clinic?.onboarded === false ? "/onboarding" : from, { replace: true });
-    } catch {
-      toast.error("Invalid email or password.");
+    } catch (err) {
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail;
+      toast.error((status === 423 || status === 429) && typeof detail === "string" ? detail : "Invalid email or password.");
     } finally {
       setBusy(false);
     }

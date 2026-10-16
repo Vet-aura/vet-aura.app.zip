@@ -28,6 +28,8 @@ from credentials_service import build_credentials_routes
 from sms_compliance import build_compliance_routes
 from invitations import build_invitation_routes, build_public_invite_routes
 from billing_cycle import build_billing_cycle_routes
+from login_security import LoginGuard, build_security_routes
+from sms_campaigns import build_campaign_routes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("vetaura")
@@ -40,6 +42,7 @@ app = FastAPI(title="Vetaura API")
 
 # Auth dependency (scoped to db)
 auth_dep = make_auth_dep(db)
+login_guard = LoginGuard(db)
 
 api = APIRouter(prefix="/api")
 
@@ -47,6 +50,7 @@ api = APIRouter(prefix="/api")
 # ---------- Startup ----------
 @app.on_event("startup")
 async def startup():
+    await login_guard.ensure_indexes()
     # Ensure demo clinic exists (single-tenant fallback for public browsing)
     if await db.patients.count_documents({"clinic_id": "demo"}) == 0:
         seed = build_seed(clinic_id="demo")
@@ -1044,7 +1048,10 @@ async def voice_usage_summary(user=Depends(auth_dep)):
 
 # ---------- Wire routers ----------
 app.include_router(api)
-app.include_router(build_auth_routes(db))
+app.include_router(build_auth_routes(db, login_guard))
+app.include_router(build_security_routes(db, auth_dep))
+for _r in build_campaign_routes(db, auth_dep):
+    app.include_router(_r)
 app.include_router(build_stripe_routes(db, auth_dep))
 app.include_router(build_template_routes(db, auth_dep))
 app.include_router(build_tryit_routes(db))
