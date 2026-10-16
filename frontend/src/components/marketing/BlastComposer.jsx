@@ -21,7 +21,7 @@ function AudiencePreview({ preview }) {
         ))}
       </div>
       {preview.sample.map((r) => (
-        <div key={r.phone_e164} className="mt-3 text-sm"><span className="font-mono-clinical text-xs text-slate-500">{r.phone_e164}</span><div className="text-slate-800">{r.body} <span className="text-slate-400">Reply STOP to opt out.</span></div></div>
+        <div key={r.phone_e164} className="mt-3 text-sm"><span className="font-mono-clinical text-xs text-slate-500">{r.phone_e164}</span><div className="text-slate-800" data-testid="audience-sample-body">{r.body}</div></div>
       ))}
     </div>
   );

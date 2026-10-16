@@ -6,7 +6,7 @@ import logging
 import os
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
@@ -17,6 +17,7 @@ from credentials_service import get_twilio_creds, get_twilio_client_from_creds
 logger = logging.getLogger(__name__)
 MERGE_FIELDS = {"first_name", "pet_name", "clinic_name"}
 OPT_OUT_SUFFIX = " Reply STOP to opt out."
+STALE_SENDING = timedelta(minutes=10)
 
 
 def _now_iso() -> str:
@@ -51,6 +52,14 @@ class RejectReq(BaseModel):
 
 def render(body: str, ctx: dict) -> str:
     return re.sub(r"\{(\w+)\}", lambda m: str(ctx.get(m.group(1), "")), body)
+
+
+def final_body(template_body: str, ctx: dict) -> str:
+    """Exact text that is sent: rendered template, clinic identity (if not already merged) and STOP line."""
+    text = render(template_body, ctx).rstrip()
+    if "{clinic_name}" not in template_body and ctx.get("clinic_name"):
+        text += f" — {ctx['clinic_name']}."
+    return text + OPT_OUT_SUFFIX
 
 
 def _require_owner(user: dict, action: str):
@@ -96,7 +105,7 @@ def build_campaign_routes(db: AsyncIOMotorDatabase, auth_dep):
                 ctx = {"first_name": (o.get("name") or "").split(" ")[0], "pet_name": pets[o["id"]][0],
                        "clinic_name": clinic.get("name", "")}
                 eligible.append({"owner_id": o["id"], "name": o.get("name", ""), "phone_e164": phone,
-                                 "body": render(template["body"], ctx), "status": "pending"})
+                                 "body": final_body(template["body"], ctx), "status": "pending"})
         return {"eligible": eligible, "excluded": excluded}
 
     async def _readiness_reason(cid: str) -> str:
@@ -120,38 +129,39 @@ def build_campaign_routes(db: AsyncIOMotorDatabase, auth_dep):
                 "status": "scheduled", "scheduled_for": nxt.isoformat() if nxt else None}})
             return
         creds = await get_twilio_creds(db, cid)
-        clinic = await db.clinics.find_one({"clinic_id": cid}, {"_id": 0, "name": 1}) or {}
         client = get_twilio_client_from_creds(creds) if creds else None
-        counts = {"sent": 0, "blocked": 0, "failed": 0}
-        recipients = camp["recipients"]
-        for r in recipients:
+        for r in camp["recipients"]:
             if r["status"] != "pending":
                 continue
             allowed, reason = await can_send_sms(db, cid, r["phone_e164"], "marketing")
             if not allowed or not client:
-                r.update(status="blocked", reason=reason or "Twilio not connected")
-                counts["blocked"] += 1
-                continue
-            try:
-                msg = await asyncio.to_thread(client.messages.create,
-                                              messaging_service_sid=creds["messaging_service_sid"],
-                                              to=r["phone_e164"], body=f"{r['body']} — {clinic.get('name', '')}.{OPT_OUT_SUFFIX}")
-                r.update(status="sent", sid=msg.sid, sent_at=_now_iso())
-                counts["sent"] += 1
-                await db.voice_usage.insert_one({"id": str(uuid.uuid4()), "clinic_id": cid, "kind": "sms", "seconds": 0,
-                                                 "metadata": {"to": r["phone_e164"], "sid": msg.sid, "type": "marketing",
-                                                              "campaign_id": campaign_id}, "at": _now_iso()})
-            except Exception as e:
-                r.update(status="failed", reason=str(e)[:200])
-                counts["failed"] += 1
+                upd = {"status": "blocked", "reason": reason or "Twilio not connected"}
+            else:
+                try:
+                    msg = await asyncio.to_thread(client.messages.create,
+                                                  messaging_service_sid=creds["messaging_service_sid"],
+                                                  to=r["phone_e164"], body=r["body"])
+                    upd = {"status": "sent", "sid": msg.sid, "sent_at": _now_iso()}
+                    await db.voice_usage.insert_one({"id": str(uuid.uuid4()), "clinic_id": cid, "kind": "sms", "seconds": 0,
+                                                     "metadata": {"to": r["phone_e164"], "sid": msg.sid, "type": "marketing",
+                                                                  "campaign_id": campaign_id}, "at": _now_iso()})
+                except Exception as e:
+                    upd = {"status": "failed", "reason": str(e)[:200]}
+            await db.sms_campaigns.update_one(
+                {"id": campaign_id, "recipients.phone_e164": r["phone_e164"]},
+                {"$set": {f"recipients.$.{k}": v for k, v in upd.items()}})
+        final = await db.sms_campaigns.find_one({"id": campaign_id}, {"_id": 0, "recipients": 1})
+        counts = {k: sum(1 for r in final["recipients"] if r["status"] == k) for k in ("sent", "blocked", "failed")}
         await db.sms_campaigns.update_one({"id": campaign_id}, {"$set": {
-            "recipients": recipients, "status": "completed", "completed_at": _now_iso(), "results": counts}})
+            "status": "completed", "completed_at": _now_iso(), "results": counts}})
 
     async def dispatch_due():
         now = _now_iso()
+        stale = (datetime.now(timezone.utc) - STALE_SENDING).isoformat()
         while True:
             camp = await db.sms_campaigns.find_one_and_update(
-                {"status": "scheduled", "scheduled_for": {"$lte": now}},
+                {"$or": [{"status": "scheduled", "scheduled_for": {"$lte": now}},
+                         {"status": "sending", "dispatch_started_at": {"$lt": stale}}]},
                 {"$set": {"status": "sending", "dispatch_started_at": now}}, projection={"_id": 0, "id": 1})
             if not camp:
                 return
@@ -226,8 +236,11 @@ def build_campaign_routes(db: AsyncIOMotorDatabase, auth_dep):
         nxt = next_send_window(profile) if quiet else None
         updates = {"approved_by": user["email"], "approved_at": _now_iso(),
                    "status": "scheduled" if quiet else "sending",
-                   "scheduled_for": nxt.isoformat() if nxt else None}
-        await db.sms_campaigns.update_one({"id": camp_id, "status": "pending_approval"}, {"$set": updates})
+                   "scheduled_for": nxt.isoformat() if nxt else None, "dispatch_started_at": _now_iso()}
+        claimed = await db.sms_campaigns.find_one_and_update(
+            {"id": camp_id, "status": "pending_approval"}, {"$set": updates}, projection={"_id": 0, "id": 1})
+        if not claimed:
+            raise HTTPException(400, "Campaign was already actioned.")
         if not quiet:
             background.add_task(dispatch, camp_id)
         return {**camp, **updates, "recipients": camp["recipients"]}

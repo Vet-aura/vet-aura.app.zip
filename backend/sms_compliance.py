@@ -220,9 +220,11 @@ def _in_quiet_hours(profile: dict, now: Optional[datetime] = None) -> bool:
 
 def next_send_window(profile: dict, now: Optional[datetime] = None) -> Optional[datetime]:
     """Earliest UTC time (5-min resolution, up to 8 days out) when marketing may send."""
-    t = (now or datetime.now(timezone.utc)).replace(second=0, microsecond=0)
+    t = now_floor = (now or datetime.now(timezone.utc)).replace(second=0, microsecond=0)
     for _ in range(8 * 24 * 12):
         if not _in_quiet_hours(profile, t):
+            while not _in_quiet_hours(profile, t - timedelta(minutes=1)) and t > now_floor:
+                t -= timedelta(minutes=1)
             return t
         t += timedelta(minutes=5)
     return None
@@ -334,6 +336,8 @@ def build_compliance_routes(db: AsyncIOMotorDatabase, auth_dep):
         if not existing:
             await _seed_profile(cid)
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        if any(k in QUIET_DEFAULTS for k in updates) and user.get("role", "owner") != "owner":
+            raise HTTPException(403, "Only clinic owners can change marketing quiet hours.")
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
         await db.sms_compliance_profiles.update_one({"clinic_id": cid}, {"$set": updates})
         return await get_profile(user)  # type: ignore

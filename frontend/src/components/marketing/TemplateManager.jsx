@@ -10,7 +10,7 @@ import { toast } from "sonner";
 const errMsg = (e, fb) => {
   const d = e?.response?.data?.detail;
   if (typeof d === "string") return d;
-  if (Array.isArray(d)) return d.map((x) => x?.msg).filter(Boolean).join(" ");
+  if (Array.isArray(d)) return d.map((x) => (x?.msg || "").replace(/^Value error, /, "")).filter(Boolean).join(" ");
   return fb;
 };
 
@@ -38,7 +38,7 @@ export function TemplateManager({ templates, isOwner, onChange }) {
   return (
     <Card className="p-6 rounded-2xl border-emerald-100 bg-white shadow-sm" data-testid="templates-card">
       <div className="flex items-center gap-2 mb-1"><Lock className="h-4 w-4 text-emerald-700" /><div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Locked templates</div></div>
-      <p className="text-sm text-slate-600 mb-4">Staff can only send these exact words. Merge fields: <code className="font-mono-clinical text-xs">{"{first_name}"}</code> <code className="font-mono-clinical text-xs">{"{pet_name}"}</code> <code className="font-mono-clinical text-xs">{"{clinic_name}"}</code>. "Reply STOP to opt out." is appended automatically.</p>
+      <p className="text-sm text-slate-600 mb-4">Staff can only send these exact words. Merge fields: <code className="font-mono-clinical text-xs">{"{first_name}"}</code> <code className="font-mono-clinical text-xs">{"{pet_name}"}</code> <code className="font-mono-clinical text-xs">{"{clinic_name}"}</code>. Your clinic name (unless merged) and "Reply STOP to opt out." are appended automatically.</p>
       <div className="space-y-2">
         {templates.length === 0 && <div className="text-sm text-slate-500 py-3" data-testid="templates-empty">No templates yet.{isOwner ? " Create your first one below." : " Ask a clinic owner to add one."}</div>}
         {templates.map((t) => (

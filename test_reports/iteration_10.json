@@ -1,0 +1,44 @@
+{
+  "summary": "Iter-10: tested Quiet Hours, Login Rate Limiting/Security alerts, and Marketing Bulk Blast + cron dispatch, both backend and frontend. Backend: new pytest suite test_iter10_quiet_ratelimit_blast.py, 24/24 passing with -n 0. It covers quiet-hours defaults and validation (422 for 25:00, 9:5, unknown tz, days 7 and -1); active state via quiet day and via time window; preflight blocks marketing during quiet hours but not care; per-email lockout (5x401 then 423 with Retry-After, correct password also gets 423); lockout of a real user creates an alert, and ack plus auth-events work; non-owner gets 403 on alerts/auth-events; a successful login resets the counter; per-IP limit returns 429 and a spoofed X-Forwarded-For does not get around it; signup per-IP limit returns 429; marketing templates are owner-only, merge fields are checked (422), templates are locked (no PUT/PATCH), archive works, and vet2 cannot access vet1's data; audience preview counts only marketing consent (1 eligible, Amelia; 3 no_consent); 0 eligible returns 400; approval rules (composer approving own blast gets 403, other clinic 404, readiness problem 400 'Brand...', owner2 approves -> sending -> completed with failed=1 from the fake Twilio creds as expected; second approve 400); approving during quiet hours gives scheduled with a future scheduled_for; cancel and reject work; cron returns 401 without or with a wrong bearer, 200 with the right one, duplicate:true on a repeated X-Webhook-Id, and a scheduled campaign set to the past gets dispatched to completed. Six concurrent approvals: one 200 and five 400, with only one Twilio call. Regression test_iter8_security.py: 23/23 pass. Frontend (Playwright): the login lockout toast shows 'Too many failed attempts. Try again in 15 minutes.'; Settings security-alerts-card shows the row and ack changes it to 'Reviewed by'; the quiet-hours card day toggle and start time save, survive a reload, and the status text updates; restored afterwards. Marketing end-to-end: nav, create template, bad merge field shows an error toast, composer preview (1 eligible plus rendered sample), submit disabled until preview, campaign 'Awaiting approval' with needs-other shown and no approve button for the composer; owner2 sees approve, toast 'Approved — sending now.', then Completed '0 sent · 0 blocked · 1 failed'; archive works after confirm. Mobile 390px has no horizontal overflow on marketing or compliance.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "sms_campaigns.dispatch", "issue": "The text actually sent is '{body} — {clinic_name}. Reply STOP to opt out.', but the audience preview and sample show only '{body} Reply STOP to opt out.'. If a template uses {clinic_name} (e.g. 'Hi Amelia, Bella is due a dental at Meadow Ridge Vet.'), the sent SMS repeats the clinic name ('...Meadow Ridge Vet. — Meadow Ridge Vet. Reply STOP...'). Preview does not match the real message."},
+      {"endpoint": "POST /api/sms/marketing/campaigns/{id}/approve + dispatch", "issue": "Campaigns can get stuck in 'sending' with no way out. The dispatch BackgroundTask is lost if the process restarts or reloads mid-send, or if dispatch raises an exception before the final update. Cron dispatch_due only picks up status='scheduled', so a stuck 'sending' campaign is never retried or recovered."},
+      {"endpoint": "POST /api/sms/marketing/campaigns/{id}/approve", "issue": "The approve endpoint does not check update_one's modified_count before scheduling dispatch. Two approvals racing between find and update could both schedule dispatch. Not reproduced: 6 concurrent approvals gave one 200. Suggest a find_one_and_update on status=pending_approval."},
+      {"endpoint": "GET /api/compliance/sms/profile quiet_status.next_send_at", "issue": "next_send_at is stepped in 5-minute increments from the current minute, so it shows e.g. 08:03 instead of 08:00 (the end of quiet hours). Cosmetic."},
+      {"endpoint": "login_security.check", "issue": "'login_blocked_locked' and 'login_blocked_ip' audit events are stored with clinic_id=None (user not passed), so owners never see attempts made during a lockout in /api/security/auth-events."},
+      {"endpoint": "PATCH /api/compliance/sms/profile", "issue": "Not owner-restricted, so any staff role can change quiet hours (and brand/campaign status). This was already the case before this round; consider owner-only for quiet-hours fields."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "TemplateManager error toast", "issue": "The merge-field error toast starts with Pydantic's 'Value error, ' prefix ('Value error, Unsupported merge field(s): email...'). Strip it in errMsg or on the backend.", "selector": "[data-sonner-toast]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/app/compliance QuietHoursCard", "issues": ["quiet-start and quiet-end use the browser's built-in time picker (<input type=time>) instead of a shadcn-styled control", "The timezone Select lists only 7 US zones, but the API accepts any IANA tz; a stored non-listed tz shows a blank Select", "The 'queue until' time is shown in the browser's local timezone, not the clinic's quiet_hours_tz, which can confuse staff"]},
+      {"screen": "/app/marketing", "issues": ["Blasts list has no pagination or limit in the UI; it will grow long", "Composer preview text does not match the actual sent body (clinic-name suffix missing, see backend minor)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter10_quiet_ratelimit_blast.py", "/app/test_reports/pytest/iter10.xml"],
+  "action_items": [
+    "Make the preview/sample body exactly match the sent body, and avoid the duplicate clinic name when the template already uses {clinic_name}",
+    "Add recovery for campaigns stuck in 'sending' (e.g. cron re-picks 'sending' older than N minutes, or wrap dispatch in try/except that marks the campaign failed)",
+    "approve: use find_one_and_update(status=pending_approval) and only dispatch if it matched",
+    "Strip the 'Value error, ' prefix from 422 messages in the toast",
+    "Optional: align next_send_at to the exact quiet-hours end, show it in the clinic's timezone, and attach clinic_id to blocked-login audit events for known users"
+  ],
+  "critical_code_review_comments": [
+    "client_ip uses hops[len-3] (TRUSTED_PROXY_HOPS=2). Verified: the recorded IP equals the real egress IP (34.170.12.145 = ifconfig.me), and spoofed XFF values ('1.1.1.1' or '1.1.1.1, 2.2.2.2') are ignored. Note: this test container uses 2 egress IPs (34.170.12.145 and 35.225.230.28), so per-IP tests can be flaky here — that is the environment, not an app bug. Running under xdist parallel also breaks them (shared Mongo guard state), so run with -n 0.",
+    "Signup records an attempt before the duplicate-email check, so signups to an already-registered email count toward the IP budget (intended).",
+    "dispatch re-checks quiet hours and reschedules, and also re-checks per-recipient consent via can_send_sms at send time — good defense in depth."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter10_quiet_ratelimit_blast.py (new)"],
+  "success_rate": {"backend": "100% (24/24 new + 23/23 iter8 regression)", "frontend": "100% of requested flows pass; minor UX/design notes only"},
+  "test_credentials": "vet1@example.com / owner2@example.com / vet2@example.com, all strongpass123, from /app/memory/test_credentials.md (accurate).",
+  "seed_data_creation": "Throwaway test_*@example.com signups (own clinics), some set to role=staff for 403 tests. TEST_ templates and campaigns in vet1's clinic were deleted afterwards. A temporary TEST_alert_ui security alert was inserted and then removed. login_attempts and login_lockouts were cleared. vet1 quiet hours restored to defaults (21:00-08:00 America/New_York, quiet_days [6], enabled).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && python -m pytest test_iter10_quiet_ratelimit_blast.py -n 0 -v (must use -n 0; tests share login guard and quiet-hours state). Some tests use today's ET weekday as a quiet day and assume the current time is outside the 21:00-08:00 ET defaults and not Sunday; at night or on Sunday, test_approval_rules/test_scheduled_dispatch depend on quiet_hours_enabled=False or defaults. The module fixture cleans TEST_ templates and campaigns."
+}

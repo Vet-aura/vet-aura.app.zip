@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,8 @@ function Actions({ c, me, isOwner, act }) {
 }
 
 export function CampaignList({ campaigns, me, isOwner, onChange }) {
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? campaigns : campaigns.slice(0, 10);
   async function act(id, action) {
     const body = action === "reject" ? { reason: window.prompt("Reason for rejecting (optional)") || "" } : undefined;
     try {
@@ -42,7 +45,7 @@ export function CampaignList({ campaigns, me, isOwner, onChange }) {
     <Card className="p-6 rounded-2xl border-emerald-100 bg-white shadow-sm" data-testid="campaigns-card">
       <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold mb-3">Blasts</div>
       {campaigns.length === 0 && <div className="text-sm text-slate-500 py-4" data-testid="campaigns-empty">No blasts yet.</div>}
-      {campaigns.map((c) => {
+      {shown.map((c) => {
         const [label, cls] = STATUS[c.status] || [c.status, ""];
         return (
           <div key={c.id} className="py-4 border-t border-slate-100 first:border-t-0 space-y-2" data-testid={`campaign-${c.id}`}>
@@ -58,6 +61,11 @@ export function CampaignList({ campaigns, me, isOwner, onChange }) {
           </div>
         );
       })}
+      {campaigns.length > 10 && (
+        <Button variant="ghost" size="sm" onClick={() => setShowAll((v) => !v)} data-testid="campaigns-toggle-all" className="mt-2 text-xs text-emerald-800">
+          {showAll ? "Show recent only" : `Show all ${campaigns.length} blasts`}
+        </Button>
+      )}
     </Card>
   );
 }

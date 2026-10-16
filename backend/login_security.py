@@ -54,20 +54,23 @@ class LoginGuard:
             "clinic_id": (user or {}).get("clinic_id"), "at": _now().isoformat(), **extra,
         })
 
+    async def _user(self, email: str) -> Optional[dict]:
+        return await self.db.users.find_one({"email": email}, {"_id": 0, "clinic_id": 1})
+
     async def check(self, email: str, request: Request, action: str):
         """Raise 423 if the email is locked, 429 if the IP is over its attempt budget."""
         now = _now()
         lock = await self.db.login_lockouts.find_one({"identifier": f"email:{email}"})
         if lock and _aware(lock["until"]) > now:
             secs = int((_aware(lock["until"]) - now).total_seconds())
-            await self.audit(f"{action}_blocked_locked", email, request)
+            await self.audit(f"{action}_blocked_locked", email, request, await self._user(email))
             raise HTTPException(423, f"Too many failed attempts. Try again in {max(1, secs // 60 + 1)} minutes.",
                                 headers={"Retry-After": str(secs)})
         ip = client_ip(request)
         count = await self.db.login_attempts.count_documents(
             {"identifier": f"ip:{ip}", "action": action, "at": {"$gte": now - WINDOW}})
         if count >= IP_MAX_ATTEMPTS:
-            await self.audit(f"{action}_blocked_ip", email, request)
+            await self.audit(f"{action}_blocked_ip", email, request, await self._user(email))
             raise HTTPException(429, "Too many attempts from this network. Please wait 15 minutes and try again.",
                                 headers={"Retry-After": str(int(WINDOW.total_seconds()))})
 

@@ -20,10 +20,10 @@ function pick(p) {
   };
 }
 
-function StatusLine({ status, enabled }) {
+function StatusLine({ status, enabled, tz }) {
   if (!enabled) return <span className="text-slate-500">Quiet hours are off — marketing can send any time.</span>;
   if (status?.active) {
-    const at = status.next_send_at ? new Date(status.next_send_at).toLocaleString() : "—";
+    const at = status.next_send_at ? `${new Date(status.next_send_at).toLocaleString(undefined, { timeZone: tz, dateStyle: "medium", timeStyle: "short" })} (${tz})` : "—";
     return <span className="text-amber-800">Quiet hours are active now. Approved blasts queue until <strong>{at}</strong>.</span>;
   }
   return <span className="text-emerald-800">Outside quiet hours — approved blasts send immediately.</span>;
@@ -58,7 +58,7 @@ export function QuietHoursCard({ profile, saving, onSave }) {
         <label className="text-xs text-slate-600">Clinic timezone
           <Select value={q.quiet_hours_tz} onValueChange={(v) => setQ({ ...q, quiet_hours_tz: v })}>
             <SelectTrigger data-testid="quiet-tz"><SelectValue /></SelectTrigger>
-            <SelectContent>{ZONES.map((z) => <SelectItem key={z} value={z}>{z.replace("_", " ")}</SelectItem>)}</SelectContent>
+            <SelectContent>{(ZONES.includes(q.quiet_hours_tz) ? ZONES : [q.quiet_hours_tz, ...ZONES]).map((z) => <SelectItem key={z} value={z}>{z.replace("_", " ")}</SelectItem>)}</SelectContent>
           </Select>
         </label>
         <div className="sm:col-span-3">
@@ -75,7 +75,7 @@ export function QuietHoursCard({ profile, saving, onSave }) {
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 mt-5 pt-4 border-t border-emerald-100">
-        <div className="text-sm" data-testid="quiet-status"><StatusLine status={profile.quiet_status} enabled={profile.quiet_hours_enabled ?? true} /></div>
+        <div className="text-sm" data-testid="quiet-status"><StatusLine status={profile.quiet_status} enabled={profile.quiet_hours_enabled ?? true} tz={profile.quiet_hours_tz || "America/New_York"} /></div>
         <Button onClick={() => onSave(q)} disabled={saving} data-testid="quiet-save" className="rounded-full bg-emerald-700 hover:bg-emerald-800 text-white">
           <Save className="h-3.5 w-3.5 mr-1.5" /> Save quiet hours
         </Button>

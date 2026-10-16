@@ -135,9 +135,15 @@ Vet-in-the-loop. Every AI output is a DRAFT. A clinician must review and sign be
 ## Test credentials
 See `/app/memory/test_credentials.md`. Admin cron token: `admin-cron-secret-change-me` (env `VETAURA_ADMIN_TOKEN`).
 
+## 2026-06 — Quiet Hours, Login Rate Limiting, Marketing Bulk Blast (iteration 10, all passing)
+- Quiet hours: clinic-set window + TZ + quiet days (Sunday default), owner-only edits; `sms_compliance.py` (`quiet_settings`, `_in_quiet_hours`, `next_send_window`); UI `components/QuietHoursCard.jsx` on /app/compliance. Marketing blocked, care unaffected.
+- Brute-force protection: `login_security.py` LoginGuard — 5 fails/15 min per email -> 423 lockout 15 min; 20/15 min per IP -> 429 (login + signup). IP = 3rd-from-last XFF hop (anti-spoof). Audit `auth_audit`, alerts `security_alerts` (GET /api/security/alerts, ack, /auth-events — owner only) + owner email via clinic BYOK. UI `SecurityAlertsCard` in Settings.
+- Marketing blast: `sms_campaigns.py` (/api/sms/marketing) — owner-only locked templates (merge fields first_name/pet_name/clinic_name), marketing-consent-only audience preview, pending_approval -> approval by a DIFFERENT owner -> send now or queue until quiet hours end. Per-recipient progress persisted; stale 'sending' recovered by cron. Page /app/marketing.
+- Platform cron `.emergent/crons.yml` every 15 min -> POST /api/cron/sms-dispatch (Bearer WEBHOOK_CRON_SECRET).
+- Note: preview pod egress alternates between 2 IPs, so per-IP tests can look flaky; per-email lockout is the primary guard.
+
 ## Backlog (P0/P1/P2)
-- **P1** Quiet-hours enforcement on outbound SMS (schema already there, needs enforcement in `can_send_sms`)
-- **P1** Bulk marketing SMS UI with template-lock + rate limiting
+- **P1** Reminder automation: vaccine/preventive due dates -> automatic care SMS via clinic number
 - **P1** Human-review path for urgent SMS conversations (already routes to Inbox as tasks)
 - **P1** Scheduler for `billing-cycle/close` — currently requires external cron
 - **P2** Case studies / testimonials on Landing
