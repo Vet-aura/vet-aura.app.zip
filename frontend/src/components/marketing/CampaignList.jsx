@@ -3,7 +3,8 @@ import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, Clock } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Smartphone, BarChart3 } from "lucide-react";
+import { CampaignResultsSheet } from "./CampaignResultsSheet";
 import { toast } from "sonner";
 import { errMsg } from "./TemplateManager";
 
@@ -16,7 +17,7 @@ const STATUS = {
   cancelled: ["Cancelled", "bg-slate-100 text-slate-600 border-slate-200"],
 };
 
-function Actions({ c, me, isOwner, act }) {
+function Actions({ c, me, isOwner, act, openResults }) {
   const pending = c.status === "pending_approval";
   const canApprove = pending && isOwner && c.created_by !== me;
   return (
@@ -24,6 +25,8 @@ function Actions({ c, me, isOwner, act }) {
       {canApprove && <Button size="sm" onClick={() => act(c.id, "approve")} data-testid={`campaign-approve-${c.id}`} className="h-8 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs"><CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve & send</Button>}
       {pending && isOwner && <Button size="sm" variant="outline" onClick={() => act(c.id, "reject")} data-testid={`campaign-reject-${c.id}`} className="h-8 rounded-full border-rose-200 text-rose-700 text-xs"><XCircle className="h-3.5 w-3.5 mr-1" /> Reject</Button>}
       {(pending || c.status === "scheduled") && (c.created_by === me || isOwner) && <Button size="sm" variant="ghost" onClick={() => act(c.id, "cancel")} data-testid={`campaign-cancel-${c.id}`} className="h-8 text-xs text-slate-500">Cancel</Button>}
+      {pending && isOwner && <Button size="sm" variant="outline" onClick={() => act(c.id, "test")} data-testid={`campaign-test-${c.id}`} className="h-8 rounded-full border-emerald-300 text-emerald-800 text-xs"><Smartphone className="h-3.5 w-3.5 mr-1" /> Send test to my phone</Button>}
+      {["completed", "sending"].includes(c.status) && <Button size="sm" variant="outline" onClick={() => openResults(c.id)} data-testid={`campaign-results-${c.id}`} className="h-8 rounded-full border-emerald-300 text-emerald-800 text-xs"><BarChart3 className="h-3.5 w-3.5 mr-1" /> Results</Button>}
       {pending && c.created_by === me && <span className="text-xs text-slate-500 self-center" data-testid={`campaign-needs-other-${c.id}`}>Another owner must approve</span>}
     </div>
   );
@@ -31,11 +34,13 @@ function Actions({ c, me, isOwner, act }) {
 
 export function CampaignList({ campaigns, me, isOwner, onChange }) {
   const [showAll, setShowAll] = useState(false);
+  const [resultsId, setResultsId] = useState(null);
   const shown = showAll ? campaigns : campaigns.slice(0, 10);
   async function act(id, action) {
     const body = action === "reject" ? { reason: window.prompt("Reason for rejecting (optional)") || "" } : undefined;
     try {
       const { data } = await api.post(`/sms/marketing/campaigns/${id}/${action}`, body);
+      if (action === "test") toast.success(`Test sent to ${data.to}.`);
       if (action === "approve") toast.success(data.status === "scheduled" ? "Approved — queued until quiet hours end." : "Approved — sending now.");
       onChange();
     } catch (e) { toast.error(errMsg(e, "Action failed.")); }
@@ -57,7 +62,8 @@ export function CampaignList({ campaigns, me, isOwner, onChange }) {
             {c.status === "scheduled" && c.scheduled_for && <div className="text-xs text-sky-800 flex items-center gap-1"><Clock className="h-3 w-3" /> Sends after {new Date(c.scheduled_for).toLocaleString()}</div>}
             {c.results && <div className="text-xs text-slate-600" data-testid={`campaign-results-${c.id}`}>{c.results.sent} sent · {c.results.blocked} blocked · {c.results.failed} failed</div>}
             {c.reject_reason && <div className="text-xs text-rose-700">Reason: {c.reject_reason}</div>}
-            <Actions c={c} me={me} isOwner={isOwner} act={act} />
+            {(c.tests || []).length > 0 && <div className="text-xs text-slate-500" data-testid={`campaign-tests-${c.id}`}>{c.tests.length} test{c.tests.length > 1 ? "s" : ""} sent · last {c.tests[c.tests.length - 1].status} to {c.tests[c.tests.length - 1].to}</div>}
+            <Actions c={c} me={me} isOwner={isOwner} act={act} openResults={setResultsId} />
           </div>
         );
       })}
@@ -66,6 +72,7 @@ export function CampaignList({ campaigns, me, isOwner, onChange }) {
           {showAll ? "Show recent only" : `Show all ${campaigns.length} blasts`}
         </Button>
       )}
+      <CampaignResultsSheet campaignId={resultsId} onClose={() => setResultsId(null)} />
     </Card>
   );
 }

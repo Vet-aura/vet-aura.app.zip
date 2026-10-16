@@ -30,6 +30,8 @@ from invitations import build_invitation_routes, build_public_invite_routes
 from billing_cycle import build_billing_cycle_routes
 from login_security import LoginGuard, build_security_routes
 from sms_campaigns import build_campaign_routes
+from care_reminders import build_reminder_routes
+from phone_verify import build_phone_verify_routes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("vetaura")
@@ -51,6 +53,7 @@ api = APIRouter(prefix="/api")
 @app.on_event("startup")
 async def startup():
     await login_guard.ensure_indexes()
+    await reminders_startup()
     # Ensure demo clinic exists (single-tenant fallback for public browsing)
     if await db.patients.count_documents({"clinic_id": "demo"}) == 0:
         seed = build_seed(clinic_id="demo")
@@ -1052,6 +1055,10 @@ app.include_router(build_auth_routes(db, login_guard))
 app.include_router(build_security_routes(db, auth_dep))
 for _r in build_campaign_routes(db, auth_dep):
     app.include_router(_r)
+_rem_router, _rem_cron, reminders_startup = build_reminder_routes(db, auth_dep)
+app.include_router(_rem_router)
+app.include_router(_rem_cron)
+app.include_router(build_phone_verify_routes(db, auth_dep))
 app.include_router(build_stripe_routes(db, auth_dep))
 app.include_router(build_template_routes(db, auth_dep))
 app.include_router(build_tryit_routes(db))

@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Settings as SettingsIcon, Download } from "lucide-react";
 import { toast } from "sonner";
 import { SecurityAlertsCard } from "@/components/SecurityAlertsCard";
+import { MyMobileCard } from "@/components/MyMobileCard";
 
 export default function Settings() {
   const { user, refreshUser } = useAuth();
@@ -90,6 +91,8 @@ export default function Settings() {
           </Button>
         </div>
       </Card>
+
+      <MyMobileCard />
 
       {(user?.role || "owner") === "owner" && <SecurityAlertsCard />}
 

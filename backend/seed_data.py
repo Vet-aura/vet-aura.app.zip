@@ -11,6 +11,22 @@ def _iso(dt):
     return dt.isoformat()
 
 
+def build_care_items(clinic_id: str, patients: list) -> list:
+    """Vaccine / preventive due dates relative to today, for the first four demo patients."""
+    today = datetime.now(timezone.utc).date()
+    plan = [
+        (0, "vaccine", "Rabies booster", -9),
+        (1, "preventive", "Senior wellness bloodwork", 12),
+        (1, "vaccine", "FVRCP booster", 45),
+        (2, "vaccine", "DHPP booster", 0),
+        (3, "preventive", "Heartworm test", 14),
+        (3, "preventive", "Dental cleaning", 60),
+    ]
+    return [{"id": _id(), "clinic_id": clinic_id, "patient_id": patients[i]["id"], "kind": kind, "name": name,
+             "due_date": (today + timedelta(days=d)).isoformat(), "status": "due", "created_by": "seed",
+             "created_at": _iso(datetime.now(timezone.utc))} for i, kind, name, d in plan]
+
+
 def build_seed(clinic_id: str = "demo"):
     NOW = datetime.now(timezone.utc)
 
@@ -88,5 +104,5 @@ def build_seed(clinic_id: str = "demo"):
     return {
         "owners": owners, "patients": patients, "visits": visits,
         "labs": labs, "weights": weights, "appointments": appointments,
-        "messages": messages, "tasks": tasks,
+        "messages": messages, "tasks": tasks, "care_items": build_care_items(clinic_id, patients),
     }

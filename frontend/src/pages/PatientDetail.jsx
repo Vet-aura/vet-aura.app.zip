@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceArea, CartesianGrid } from "recharts";
+import { CareItemsPanel } from "@/components/CareItemsPanel";
 import { ArrowLeft, PawPrint, AlertTriangle, ClipboardList } from "lucide-react";
 
 const RANGES = {
@@ -80,6 +81,7 @@ export default function PatientDetail() {
           <TabsTrigger value="trends" data-testid="tab-trends">Trends</TabsTrigger>
           <TabsTrigger value="labs" data-testid="tab-labs">Labs</TabsTrigger>
           <TabsTrigger value="notes" data-testid="tab-notes">Signed notes</TabsTrigger>
+          <TabsTrigger value="care" data-testid="tab-care">Care due</TabsTrigger>
         </TabsList>
 
         <TabsContent value="visits" className="mt-4">
@@ -186,6 +188,10 @@ export default function PatientDetail() {
               </div>
             )}
           </Card>
+        </TabsContent>
+
+        <TabsContent value="care" className="mt-4">
+          <CareItemsPanel patientId={p.id} />
         </TabsContent>
       </Tabs>
     </div>

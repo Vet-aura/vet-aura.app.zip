@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate, Link } from "react-router-dom";
-import { LayoutDashboard, Mic, PawPrint, Inbox, CalendarDays, ClipboardList, Stethoscope, MessagesSquare, CreditCard, Settings as SettingsIcon, Activity, LogOut, Sparkles, ListTodo, TrendingUp, PhoneCall, FileText, ShieldCheck, Users, Plug, Megaphone } from "lucide-react";
+import { LayoutDashboard, Mic, PawPrint, Inbox, CalendarDays, ClipboardList, Stethoscope, MessagesSquare, CreditCard, Settings as SettingsIcon, Activity, LogOut, Sparkles, ListTodo, TrendingUp, PhoneCall, FileText, ShieldCheck, Users, Plug, Megaphone, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthProvider";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -22,6 +22,7 @@ const SECONDARY_NAV = [
   { to: "/app/phone", icon: PhoneCall, label: "Phone & SMS", tid: "nav-phone" },
   { to: "/app/compliance", icon: ShieldCheck, label: "SMS Compliance", tid: "nav-compliance" },
   { to: "/app/marketing", icon: Megaphone, label: "Marketing SMS", tid: "nav-marketing" },
+  { to: "/app/reminders", icon: BellRing, label: "Care Reminders", tid: "nav-reminders" },
   { to: "/app/scribe/templates", icon: FileText, label: "Scribe Templates", tid: "nav-templates" },
   { to: "/app/team", icon: Users, label: "Team", tid: "nav-team" },
   { to: "/app/integrations", icon: Plug, label: "Integrations", tid: "nav-integrations" },

@@ -13,11 +13,15 @@ from pydantic import BaseModel, Field, field_validator
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from sms_compliance import _normalize_phone, _in_quiet_hours, next_send_window, can_send_sms
 from credentials_service import get_twilio_creds, get_twilio_client_from_creds
+from sms_sender import send_raw_sms
 
 logger = logging.getLogger(__name__)
 MERGE_FIELDS = {"first_name", "pet_name", "clinic_name"}
 OPT_OUT_SUFFIX = " Reply STOP to opt out."
 STALE_SENDING = timedelta(minutes=10)
+TEST_LIMIT_PER_CAMPAIGN = 5
+REPLY_WINDOW = timedelta(days=7)
+BOOKING_WINDOW = timedelta(days=30)
 
 
 def _now_iso() -> str:
@@ -244,6 +248,73 @@ def build_campaign_routes(db: AsyncIOMotorDatabase, auth_dep):
         if not quiet:
             background.add_task(dispatch, camp_id)
         return {**camp, **updates, "recipients": camp["recipients"]}
+
+    @router.post("/campaigns/{camp_id}/test")
+    async def send_test(camp_id: str, user=Depends(auth_dep)):
+        _require_owner(user, "send test messages")
+        camp = await _pending(user["clinic_id"], camp_id, ("pending_approval",))
+        me = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0, "mobile_phone": 1, "mobile_verified": 1}) or {}
+        if not me.get("mobile_verified") or not me.get("mobile_phone"):
+            raise HTTPException(400, "Verify your mobile number in Settings first.")
+        if len(camp.get("tests") or []) >= TEST_LIMIT_PER_CAMPAIGN:
+            raise HTTPException(429, f"Test limit reached ({TEST_LIMIT_PER_CAMPAIGN} per blast).")
+        body = "[TEST] " + camp["recipients"][0]["body"]
+        entry = {"by": user["email"], "to": me["mobile_phone"], "at": _now_iso(), "body": body}
+        try:
+            entry["sid"] = await send_raw_sms(db, user["clinic_id"], me["mobile_phone"], body, "marketing_test",
+                                              campaign_id=camp_id)
+            entry["status"] = "sent"
+        except Exception as e:
+            entry.update(status="failed", reason=str(e)[:200])
+        await db.sms_campaigns.update_one({"id": camp_id}, {"$push": {"tests": entry}})
+        if entry["status"] != "sent":
+            raise HTTPException(400, f"Test send failed: {entry['reason']}")
+        return entry
+
+    @router.get("/campaigns/{camp_id}/results")
+    async def results(camp_id: str, user=Depends(auth_dep)):
+        cid = user["clinic_id"]
+        camp = await db.sms_campaigns.find_one({"id": camp_id, "clinic_id": cid}, {"_id": 0})
+        if not camp:
+            raise HTTPException(404, "Campaign not found")
+        rows, sent = [], [r for r in camp["recipients"] if r["status"] == "sent"]
+        owner_ids = [r["owner_id"] for r in camp["recipients"]]
+        pets = {}
+        for p in await db.patients.find({"clinic_id": cid, "owner_id": {"$in": owner_ids}}, {"_id": 0, "id": 1, "owner_id": 1}).to_list(10000):
+            pets.setdefault(p["owner_id"], []).append(p["id"])
+        for r in camp["recipients"]:
+            row = {k: r.get(k) for k in ("owner_id", "name", "phone_e164", "status", "reason", "sent_at")}
+            row.update(replied=None, opted_out_at=None, booked_at=None)
+            if r["status"] == "sent" and r.get("sent_at"):
+                start = datetime.fromisoformat(r["sent_at"])
+                s_iso, reply_end, book_end = start.isoformat(), (start + REPLY_WINDOW).isoformat(), (start + BOOKING_WINDOW).isoformat()
+                sess = await db.receptionist_sessions.find_one({"clinic_id": cid, "from_number": r["phone_e164"]}, {"_id": 0, "transcript": 1})
+                reply = next((t for t in (sess or {}).get("transcript", [])
+                              if t.get("role") == "user" and s_iso <= t.get("at", "") <= reply_end), None)
+                if reply:
+                    row["replied"] = {"at": reply["at"], "text": reply.get("text", "")[:160]}
+                opt = await db.consent_events.find_one({"clinic_id": cid, "phone_e164": r["phone_e164"], "consent_type": "marketing",
+                                                        "action": "opt_out", "at": {"$gte": s_iso}}, {"_id": 0, "at": 1})
+                row["opted_out_at"] = (opt or {}).get("at")
+                pids = pets.get(r["owner_id"], [])
+                booked = []
+                for coll, field in (("appointments", "created_at"), ("appointments", "datetime"), ("visits", "date")):
+                    d = await db[coll].find_one({"clinic_id": cid, "patient_id": {"$in": pids}, field: {"$gte": s_iso, "$lte": book_end}},
+                                                {"_id": 0, field: 1}, sort=[(field, 1)])
+                    if d:
+                        booked.append(d[field])
+                row["booked_at"] = min(booked) if booked else None
+            rows.append(row)
+        n = len(sent)
+        rate = lambda k: round(100 * sum(1 for x in rows if x[k]) / n, 1) if n else 0.0
+        summary = {"recipients": len(rows), "sent": n,
+                   "blocked": sum(1 for x in rows if x["status"] == "blocked"),
+                   "failed": sum(1 for x in rows if x["status"] == "failed"),
+                   "replied": sum(1 for x in rows if x["replied"]), "opted_out": sum(1 for x in rows if x["opted_out_at"]),
+                   "booked": sum(1 for x in rows if x["booked_at"]),
+                   "reply_rate": rate("replied"), "opt_out_rate": rate("opted_out_at"), "booking_rate": rate("booked_at")}
+        return {"campaign": {k: camp.get(k) for k in ("id", "name", "status", "template_name", "approved_by", "completed_at", "created_at")},
+                "summary": summary, "rows": rows}
 
     @router.post("/campaigns/{camp_id}/reject")
     async def reject(camp_id: str, req: RejectReq, user=Depends(auth_dep)):
