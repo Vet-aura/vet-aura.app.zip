@@ -126,7 +126,7 @@ export default function AppShell() {
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-2 text-xs">
               <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-slate-600">Claude Sonnet 5 · Whisper</span>
+              <span className="text-slate-600">Claude Opus 5.5 · Whisper</span>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger data-testid="user-menu" className="h-9 w-9 rounded-full bg-gradient-to-br from-emerald-600 to-emerald-800 grid place-items-center text-white font-semibold text-sm shadow-sm hover:shadow-md transition-all">

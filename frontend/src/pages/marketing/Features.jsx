@@ -31,7 +31,7 @@ const FLAGSHIP = [
   {
     icon: MessagesSquare,
     title: "Staff-reviewed AI drafts",
-    body: "Empathetic, plain-language replies drafted by Claude Sonnet 5 with the pet's context loaded. Suggested follow-up task attached. Staff edits, approves, and sends — the audit log captures everything.",
+    body: "Empathetic, plain-language replies drafted by Claude Opus 5.5 with the pet's context loaded. Suggested follow-up task attached. Staff edits, approves, and sends — the audit log captures everything.",
   },
   {
     icon: ShieldCheck,

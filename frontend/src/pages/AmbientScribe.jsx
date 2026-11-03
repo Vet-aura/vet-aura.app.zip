@@ -181,7 +181,7 @@ export default function AmbientScribe() {
           Record the visit. Sign the note.
         </h1>
         <p className="text-sm text-slate-600 mt-2 max-w-2xl">
-          Vetaura transcribes the exam via OpenAI Whisper and drafts a structured SOAP note with Claude Sonnet 5. You review, edit and sign — nothing goes into the record without you.
+          Vetaura transcribes the exam via OpenAI Whisper and drafts a structured SOAP note with Claude Opus 5.5. You review, edit and sign — nothing goes into the record without you.
         </p>
       </div>
 
@@ -337,7 +337,7 @@ export default function AmbientScribe() {
                 <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold">SOAP draft</div>
                 <div className="flex items-center gap-2 mt-1">
                   <Wand2 className="h-3 w-3 text-emerald-700" />
-                  <div className="text-[11px] text-emerald-800 font-medium">Claude Sonnet 5 · {soap.confidence ? `confidence ${soap.confidence}` : "awaiting draft"}</div>
+                  <div className="text-[11px] text-emerald-800 font-medium">Claude Opus 5.5 · {soap.confidence ? `confidence ${soap.confidence}` : "awaiting draft"}</div>
                 </div>
               </div>
               <Button

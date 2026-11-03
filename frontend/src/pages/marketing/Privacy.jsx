@@ -12,7 +12,7 @@ const CONTENT = [
   },
   {
     h: "3. Sub-processors",
-    p: "We use trusted sub-processors under strict data-processing agreements: Anthropic (Claude Sonnet 5 for clinical drafting), OpenAI (Whisper for audio transcription), Stripe (subscription billing), and our cloud infrastructure provider. A current list is available on request. All are contractually prohibited from using your data for training or resale.",
+    p: "We use trusted sub-processors under strict data-processing agreements: Anthropic (Claude Opus 5.5 for clinical drafting), OpenAI (Whisper for audio transcription), Stripe (subscription billing), and our cloud infrastructure provider. A current list is available on request. All are contractually prohibited from using your data for training or resale.",
   },
   {
     h: "4. AI model training",

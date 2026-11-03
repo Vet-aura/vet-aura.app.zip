@@ -150,7 +150,7 @@ export default function PhoneSms() {
         <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold mb-2">How it works</div>
         <ol className="text-sm text-slate-700 space-y-1.5 list-decimal list-inside">
           <li>Inbound call rings your Twilio number → Vetaura answers with your greeting.</li>
-          <li>Caller speaks → Twilio speech recognition → Claude Sonnet 5 replies via TwiML voice.</li>
+          <li>Caller speaks → Twilio speech recognition → Claude Opus 5.5 replies via TwiML voice.</li>
           <li>No response or after hours → voicemail is recorded, transcribed by Whisper, and turned into a task in your Inbox.</li>
           <li>Emergency keywords ("collapse", "seizure"…) trigger an immediate deterministic handoff to your emergency line.</li>
           <li>Inbound SMS: STOP / HELP / START are handled automatically; other messages get an AI reply. Every send is checked against your consent ledger.</li>

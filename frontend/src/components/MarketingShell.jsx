@@ -83,7 +83,7 @@ export default function MarketingShell({ children }) {
           </div>
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-3">Powered by</div>
-            <div className="text-slate-500 text-xs font-mono-clinical">Claude Sonnet 5<br />OpenAI Whisper</div>
+            <div className="text-slate-500 text-xs font-mono-clinical">Claude Opus 5.5<br />OpenAI Whisper</div>
           </div>
         </div>
         <div className="border-t border-emerald-100 py-4 text-center text-xs text-slate-400">

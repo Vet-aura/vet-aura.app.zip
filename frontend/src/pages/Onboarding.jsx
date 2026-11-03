@@ -120,7 +120,7 @@ export default function Onboarding() {
             <p className="text-slate-600 mt-2 text-sm">Try the Ambient Scribe first — it's the fastest way to feel the value.</p>
             <div className="mt-6 grid sm:grid-cols-2 gap-3">
               {[
-                { title: "Record an appointment", body: "Or load a built-in sample transcript. Claude Sonnet 5 will draft a full SOAP.", tid: "onboard-tip-scribe" },
+                { title: "Record an appointment", body: "Or load a built-in sample transcript. Claude Opus 5.5 will draft a full SOAP.", tid: "onboard-tip-scribe" },
                 { title: "Draft an owner discharge", body: "In Spanish, French, Mandarin — with a shareable owner-portal link.", tid: "onboard-tip-discharge" },
                 { title: "Triage a client message", body: "Empathetic drafts with urgency tags; staff signs off.", tid: "onboard-tip-inbox" },
                 { title: "Generate a shift handoff", body: "One click summarises every hospitalized case.", tid: "onboard-tip-handoff" },

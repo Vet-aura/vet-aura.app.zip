@@ -65,7 +65,7 @@ const LEGAL = [
   },
   {
     title: "AI transparency & AVMA guidance",
-    body: "Following AVMA guidance on AI in veterinary medicine (2024–2025), Vetaura discloses model provenance (Claude Sonnet 5, OpenAI Whisper), shows confidence and flags on every draft, keeps source transcripts for verification and requires clinician sign-off before anything enters the record.",
+    body: "Following AVMA guidance on AI in veterinary medicine (2024–2025), Vetaura discloses model provenance (Claude Opus 5.5, OpenAI Whisper), shows confidence and flags on every draft, keeps source transcripts for verification and requires clinician sign-off before anything enters the record.",
     cite: "AVMA AI in Veterinary Medicine guidance",
   },
   {

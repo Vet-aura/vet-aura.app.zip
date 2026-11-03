@@ -17,7 +17,7 @@ Vet-in-the-loop. Every AI output is a DRAFT. A clinician must review and sign be
 - **Backend:** FastAPI + Motor (Async MongoDB). Multi-tenant by `clinic_id` on every doc.
 - **Auth:** Emergent Google OAuth + email/password JWT + role-based access control (owner/vet/tech/reception).
 - **Billing:** Stripe subscriptions (3 core plans + Scribe add-on, 14-day trial). Bundle coupon (`vetaura_scribe_bundle_20`, 20% off Scribe). Metered price `vetaura_voice_overage_metered` for voice overage billing.
-- **AI:** Claude Sonnet 5 (SOAP, differentials, discharge, receptionist) + OpenAI Whisper (audio + voicemail transcription). Emergent Universal Key.
+- **AI:** Claude Opus 5.5 (SOAP, differentials, discharge, receptionist) + OpenAI Whisper (audio + voicemail transcription). Emergent Universal Key.
 - **Voice + SMS (per-clinic BYOK):** Clinic connects their OWN Twilio account via Restricted API Key (SID + Secret) + Messaging Service SID. Inbound webhooks are addressed by per-clinic tokenised URLs `/api/twilio/{voice,sms}/inbound/{clinic_id}/{webhook_token}`. Never accepts an Auth Token. Outbound provisioning and SMS via clinic's own credentials.
 - **Email (per-clinic BYOK):** Clinic connects their OWN Resend or SendGrid API key + from-address. Every discharge email and team-invite email routes through the clinic's key.
 - **A2P 10DLC:** Vetaura is a pure orchestrator — 11-item compliance checklist, Brand + Campaign attestation (clinic pastes their approved SIDs), consent ledger (immutable append-only events + materialised current status), STOP/HELP/START keyword handling, marketing vs care consent separation. No auto-generated legal text.

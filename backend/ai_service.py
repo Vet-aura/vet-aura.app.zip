@@ -11,7 +11,7 @@ from emergentintegrations.llm.openai import OpenAISpeechToText
 logger = logging.getLogger(__name__)
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 
-CLAUDE_MODEL = "claude-sonnet-5"
+CLAUDE_MODEL = "claude-opus-5-5"
 CLAUDE_PROVIDER = "anthropic"
 
 

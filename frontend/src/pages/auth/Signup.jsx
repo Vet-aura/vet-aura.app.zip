@@ -63,7 +63,7 @@ export default function Signup() {
             ))}
           </ul>
         </div>
-        <div className="text-xs text-emerald-200/60">© Vetaura · Powered by Claude Sonnet 5 + OpenAI Whisper</div>
+        <div className="text-xs text-emerald-200/60">© Vetaura · Powered by Claude Opus 5.5 + OpenAI Whisper</div>
       </div>
 
       <div className="flex items-center justify-center p-6 sm:p-10">
