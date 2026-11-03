@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CreditCard, Sparkles, Check, Loader2, Mic } from "lucide-react";
 import { toast } from "sonner";
+import { BillingNotices } from "@/components/BillingNotices";
+
+const errDetail = (e, fb) => (typeof e?.response?.data?.detail === "string" ? e.response.data.detail : fb);
 
 const HIGHLIGHTS = {
   vetaura_starter_monthly: ["Inbox + follow-ups", "Receptionist chat widget", "2 staff seats"],
@@ -17,15 +20,17 @@ const HIGHLIGHTS = {
 const SCRIBE_KEY = "vetaura_scribe_addon_monthly";
 
 export default function Billing() {
-  const { user } = useAuth();
-  const [plans, setPlans] = useState([]);
+  const { user, refreshUser } = useAuth();
+  const isOwner = (user?.role || "owner") === "owner";
+  const [plans, setPlans] = useState(null);
   const [busy, setBusy] = useState(null);
   const [attachScribe, setAttachScribe] = useState(false);
   const [scribeQty, setScribeQty] = useState(1);
 
   useEffect(() => {
-    api.get("/plans").then((r) => setPlans(r.data.plans || [])).catch(() => {});
-  }, []);
+    api.get("/plans").then((r) => setPlans(r.data.plans || [])).catch(() => setPlans([]));
+    refreshUser?.();
+  }, [refreshUser]);
 
   async function checkout(lookup_key) {
     setBusy(lookup_key);
@@ -46,8 +51,8 @@ export default function Billing() {
         origin_url: window.location.origin,
       });
       window.location.href = data.checkout_url;
-    } catch {
-      toast.error("Could not open checkout.");
+    } catch (e) {
+      toast.error(errDetail(e, "Could not open checkout."));
       setBusy(null);
     }
   }
@@ -56,8 +61,8 @@ export default function Billing() {
     try {
       const { data } = await api.post("/payments/portal", { origin_url: window.location.origin });
       window.location.href = data.portal_url;
-    } catch {
-      toast.error("Billing portal unavailable — subscribe first.");
+    } catch (e) {
+      toast.error(errDetail(e, "Billing portal unavailable. Subscribe first."));
     }
   }
 
@@ -66,8 +71,8 @@ export default function Billing() {
     ? Math.max(0, Math.ceil((new Date(clinic.trial_ends_at) - new Date()) / 86400000))
     : 0;
 
-  const corePlans = plans.filter((p) => p.lookup_key !== SCRIBE_KEY);
-  const scribe = plans.find((p) => p.lookup_key === SCRIBE_KEY);
+  const corePlans = (plans || []).filter((p) => p.lookup_key !== SCRIBE_KEY);
+  const scribe = (plans || []).find((p) => p.lookup_key === SCRIBE_KEY);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6">
@@ -75,6 +80,10 @@ export default function Billing() {
         <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Billing</div>
         <h1 className="font-serif-display text-3xl sm:text-4xl font-semibold text-emerald-950 tracking-tight mt-1">Your subscription.</h1>
       </div>
+
+      <BillingNotices clinic={clinic} />
+      {plans?.length === 0 && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700" data-testid="billing-unavailable">Plans can't be loaded right now because the payment system isn't reachable. Please try again shortly.</div>}
+      {!isOwner && <div className="text-xs text-slate-500" data-testid="billing-owner-only">Only clinic owners can change the subscription.</div>}
 
       <Card className="p-6 rounded-2xl border-emerald-100 bg-white shadow-sm" data-testid="billing-status">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -88,7 +97,7 @@ export default function Billing() {
               )}
             </div>
           </div>
-          {clinic.stripe_customer_id && (
+          {clinic.stripe_customer_id && isOwner && (
             <Button onClick={portal} variant="outline" className="rounded-full border-emerald-300 text-emerald-800 hover:bg-emerald-50" data-testid="billing-portal">
               <CreditCard className="h-4 w-4 mr-2" /> Manage billing
             </Button>

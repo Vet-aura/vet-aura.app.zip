@@ -13,3 +13,10 @@ crons:
     endpoint: "{{BASE_URL}}/api/cron/care-reminders"
     method: POST
     enabled: true
+  - name: billing-cycle-close
+    description: "Monthly: report voice-minute overage for each paying clinic to Stripe"
+    cron: "0 6 1 * *"
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    endpoint: "{{BASE_URL}}/api/billing-cycle/close"
+    method: POST
+    enabled: true

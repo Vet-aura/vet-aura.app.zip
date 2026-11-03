@@ -13,6 +13,7 @@ Design:
   - An admin `preview` endpoint returns the current overage tally without recording it.
 """
 from __future__ import annotations
+import hmac
 import os
 import logging
 from datetime import datetime, timezone, timedelta
@@ -169,17 +170,20 @@ def build_billing_cycle_routes(db: AsyncIOMotorDatabase, auth_dep):
         return await record_overage_for_clinic(db, clinic, dry_run=True)
 
     @router.post("/close")
-    async def close_cycle(x_admin_token: Optional[str] = Header(None)):
+    async def close_cycle(x_admin_token: Optional[str] = Header(None), authorization: Optional[str] = Header(None)):
         """Admin cron endpoint — sweeps ALL clinics.
 
         Requires header X-Admin-Token matching env VETAURA_ADMIN_TOKEN.
         Intended to be triggered by an external scheduler once at end of each billing month.
         """
-        admin = os.environ.get("VETAURA_ADMIN_TOKEN", "")
-        if not admin or x_admin_token != admin:
+        # Cron endpoints must ack 2xx quickly; this sweep is short (one Stripe call per over-cap clinic).
+        admin, cron = os.environ.get("VETAURA_ADMIN_TOKEN", ""), os.environ["WEBHOOK_CRON_SECRET"]
+        bearer = (authorization or "")[7:] if (authorization or "").startswith("Bearer ") else ""
+        ok = (bearer and hmac.compare_digest(bearer, cron)) or (admin and x_admin_token and hmac.compare_digest(x_admin_token, admin))
+        if not ok:
             raise HTTPException(403, "Admin token required")
         results = []
-        async for clinic in db.clinics.find({"plan_status": {"$in": ["active", "trial"]}}, {"_id": 0}):
+        async for clinic in db.clinics.find({"plan_status": {"$in": ["active", "past_due"]}, "stripe_subscription_id": {"$ne": None}}, {"_id": 0}):
             try:
                 r = await record_overage_for_clinic(db, clinic, dry_run=False)
                 results.append(r)

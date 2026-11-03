@@ -142,9 +142,38 @@ async def _current_user(request: Request, db: AsyncIOMotorDatabase) -> dict:
     return user
 
 
+PAST_DUE_GRACE = timedelta(days=7)
+BILLING_EXEMPT = ("/api/auth", "/api/payments", "/api/plans", "/api/clinic", "/api/export", "/api/security", "/api/me")
+
+
+def _parse(ts):
+    return datetime.fromisoformat(str(ts).replace("Z", "+00:00")) if ts else None
+
+
+def clinic_has_access(clinic: dict) -> bool:
+    """Active / in-trial / within 7-day past-due grace. Everything else is paywalled."""
+    st, now = clinic.get("plan_status"), datetime.now(timezone.utc)
+    if st == "active":
+        return True
+    if st in ("trialing", "trial"):
+        end = _parse(clinic.get("trial_ends_at"))
+        return bool(clinic.get("stripe_subscription_id")) or (end is not None and end > now)
+    if st == "past_due":
+        since = _parse(clinic.get("past_due_since"))
+        return since is None or now - since < PAST_DUE_GRACE
+    return False
+
+
 def make_auth_dep(db: AsyncIOMotorDatabase):
     async def dep(request: Request) -> dict:
-        return await _current_user(request, db)
+        user = await _current_user(request, db)
+        if not request.url.path.startswith(BILLING_EXEMPT):
+            clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]},
+                                               {"_id": 0, "plan_status": 1, "trial_ends_at": 1,
+                                                "stripe_subscription_id": 1, "past_due_since": 1})
+            if clinic and not clinic_has_access(clinic):
+                raise HTTPException(402, "Your Vetaura subscription isn't active. Choose a plan in Billing to keep using the app.")
+        return user
     return dep
 
 
@@ -280,7 +309,8 @@ def build_auth_routes(db: AsyncIOMotorDatabase, guard):
     @auth_router.get("/me")
     async def me(request: Request):
         user = await _current_user(request, db)
-        clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
+        clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0}) or {}
+        clinic["billing_access"] = clinic_has_access(clinic)
         return {"user_id": user["user_id"], "clinic_id": user["clinic_id"], "email": user["email"], "name": user["name"], "role": user.get("role", "owner"), "picture": user.get("picture"), "clinic": clinic}
 
     @auth_router.post("/logout")

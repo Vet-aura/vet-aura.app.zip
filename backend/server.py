@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os, logging, uuid, io, csv
+import stripe
+from fastapi.responses import JSONResponse
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
@@ -42,6 +44,12 @@ mongo = AsyncIOMotorClient(mongo_url)
 db = mongo[os.environ["DB_NAME"]]
 
 app = FastAPI(title="Vetaura API")
+
+
+@app.exception_handler(stripe.error.StripeError)
+async def _stripe_error(request, exc):
+    logging.getLogger("stripe_service").error(f"Stripe error on {request.url.path}: {exc}")
+    return JSONResponse(status_code=503, content={"detail": "Payments are temporarily unavailable. Please try again shortly."})
 
 # Auth dependency (scoped to db)
 auth_dep = make_auth_dep(db)

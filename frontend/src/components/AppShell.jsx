@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate, Link } from "react-router-dom";
+import { NavLink, Outlet, useNavigate, Link, Navigate, useLocation } from "react-router-dom";
 import { LayoutDashboard, Mic, PawPrint, Inbox, CalendarDays, ClipboardList, Stethoscope, MessagesSquare, CreditCard, Settings as SettingsIcon, Activity, LogOut, Sparkles, ListTodo, TrendingUp, PhoneCall, FileText, ShieldCheck, Users, Plug, Megaphone, BellRing } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthProvider";
@@ -34,6 +34,7 @@ const SECONDARY_NAV = [
 export default function AppShell() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const location = useLocation();
   const clinic = user?.clinic || {};
 
   const trialLeft = clinic.trial_ends_at
@@ -166,7 +167,9 @@ export default function AppShell() {
         </nav>
 
         <main className="flex-1 overflow-y-auto pb-20 lg:pb-0">
-          <Outlet />
+          {user?.clinic?.billing_access === false && !["/app/billing", "/app/settings"].includes(location.pathname)
+            ? <Navigate to="/app/billing" replace />
+            : <Outlet />}
         </main>
       </div>
     </div>

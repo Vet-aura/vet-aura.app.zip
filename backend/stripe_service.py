@@ -2,7 +2,7 @@
 import os
 import stripe
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -141,7 +141,71 @@ class BundleCheckoutReq(BaseModel):
     scribe_quantity: int = 1
 
 
+def safe_origin(origin: str, request: Request) -> str:
+    """Only redirect Stripe back to our own app (same host as this API, PUBLIC_APP_URL or CORS list)."""
+    base = os.environ["PUBLIC_APP_URL"].rstrip("/")
+    allowed = {o.strip().rstrip("/") for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip() not in ("", "*")}
+    allowed.add(base)
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if host:
+        allowed.add(f"https://{host}")
+        base = f"https://{host}"
+    o = (origin or "").rstrip("/")
+    return o if o in allowed else base
+
+
+def _iso(ts) -> str:
+    return datetime.fromtimestamp(int(ts), tz=timezone.utc).isoformat()
+
+
+def _sub_id_from_invoice(inv: dict):
+    return inv.get("subscription") or (((inv.get("parent") or {}).get("subscription_details") or {}).get("subscription"))
+
+
 def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
+    async def sync_subscription(sub: dict, clinic_id: str = None, plan: str = None):
+        """Mirror a Stripe Subscription onto the clinic doc (status, trial end, renewal, past-due clock)."""
+        sub = sub.to_dict() if hasattr(sub, "to_dict") else sub
+        clinic_id = clinic_id or (sub.get("metadata") or {}).get("clinic_id")
+        q = {"clinic_id": clinic_id} if clinic_id else {"stripe_subscription_id": sub["id"]}
+        items = ((sub.get("items") or {}).get("data") or [{}])
+        period_end = sub.get("current_period_end") or items[0].get("current_period_end")
+        upd = {"plan_status": sub["status"], "stripe_subscription_id": sub["id"],
+               "cancel_at_period_end": bool(sub.get("cancel_at_period_end")),
+               "current_period_end": _iso(period_end) if period_end else None,
+               "billing_synced_at": datetime.now(timezone.utc).isoformat()}
+        if sub.get("customer"):
+            upd["stripe_customer_id"] = sub["customer"]
+        if sub.get("trial_end"):
+            upd["trial_ends_at"] = _iso(sub["trial_end"])
+        if plan:
+            upd["plan"] = plan
+        await db.clinics.update_one(q, {"$set": upd})
+        if sub["status"] == "past_due":
+            await db.clinics.update_one({**q, "past_due_since": {"$exists": False}},
+                                        {"$set": {"past_due_since": datetime.now(timezone.utc).isoformat()}})
+        else:
+            await db.clinics.update_one(q, {"$unset": {"past_due_since": "", "billing_notice": ""}} if sub["status"] == "active"
+                                        else {"$unset": {"past_due_since": ""}})
+
+    async def prepare_checkout(user: dict) -> tuple[dict, str, int]:
+        """Owner-only; blocks double subscriptions; carries over remaining in-app trial days."""
+        if user.get("role", "owner") != "owner":
+            raise HTTPException(403, "Only clinic owners can manage the subscription.")
+        clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
+        if clinic.get("stripe_subscription_id") and clinic.get("plan_status") in ("active", "trialing", "past_due"):
+            raise HTTPException(400, "You already have a subscription. Use “Manage billing” to change plan or payment method.")
+        customer_id = clinic.get("stripe_customer_id")
+        if not customer_id:
+            cust = stripe.Customer.create(email=user["email"], name=clinic["name"], metadata={"clinic_id": clinic["clinic_id"]})
+            customer_id = cust.id
+            await db.clinics.update_one({"clinic_id": user["clinic_id"]}, {"$set": {"stripe_customer_id": customer_id}})
+        trial_days = 0
+        if clinic.get("trial_ends_at") and not clinic.get("stripe_subscription_id"):
+            left = datetime.fromisoformat(clinic["trial_ends_at"].replace("Z", "+00:00")) - datetime.now(timezone.utc)
+            trial_days = max(0, min(14, left.days))
+        return clinic, customer_id, trial_days
+
     @stripe_router.get("/plans")
     async def list_plans():
         """Public: return plan catalog with Stripe prices for the marketing site."""
@@ -162,40 +226,25 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
         return {"plans": out}
 
     @stripe_router.post("/payments/checkout")
-    async def checkout(req: CheckoutReq, user=Depends(auth_dep)):
+    async def checkout(req: CheckoutReq, request: Request, user=Depends(auth_dep)):
         prices = stripe.Price.list(lookup_keys=[req.lookup_key], active=True, limit=1).data
         if not prices:
             raise HTTPException(400, f"Plan not found: {req.lookup_key}")
         price = prices[0]
 
-        # Ensure Stripe customer for the clinic
-        clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
-        customer_id = clinic.get("stripe_customer_id")
-        if not customer_id:
-            cust = stripe.Customer.create(
-                email=user["email"],
-                name=clinic["name"],
-                metadata={"clinic_id": clinic["clinic_id"]},
-            )
-            customer_id = cust.id
-            await db.clinics.update_one({"clinic_id": user["clinic_id"]}, {"$set": {"stripe_customer_id": customer_id}})
-
-        # 14-day trial via subscription_data
-        trial_days = 14
-        # find trial from catalog
-        for c in CATALOG:
-            for pr in c["prices"]:
-                if pr["lookup_key"] == req.lookup_key and pr.get("trial_period_days"):
-                    trial_days = pr["trial_period_days"]
-
+        clinic, customer_id, trial_days = await prepare_checkout(user)
+        origin = safe_origin(req.origin_url, request)
+        sub_data = {"metadata": {"clinic_id": clinic["clinic_id"], "lookup_key": req.lookup_key}}
+        if trial_days > 0:
+            sub_data["trial_period_days"] = trial_days
         kwargs = dict(
             customer=customer_id,
             line_items=[{"price": price.id, "quantity": 1}],
             mode="subscription",
-            success_url=f"{req.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{req.origin_url}/app/billing",
+            success_url=f"{origin}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{origin}/app/billing",
             metadata={"clinic_id": clinic["clinic_id"], "lookup_key": req.lookup_key},
-            subscription_data={"trial_period_days": trial_days, "metadata": {"clinic_id": clinic["clinic_id"]}},
+            subscription_data=sub_data,
         )
 
         tax_mode = get_tax_mode()
@@ -233,7 +282,7 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
         return {"checkout_url": session.url, "session_id": session.id}
 
     @stripe_router.post("/payments/checkout-bundle")
-    async def checkout_bundle(req: BundleCheckoutReq, user=Depends(auth_dep)):
+    async def checkout_bundle(req: BundleCheckoutReq, request: Request, user=Depends(auth_dep)):
         """Attach the Scribe add-on to any core plan in a single checkout with a 20% bundle discount."""
         core = stripe.Price.list(lookup_keys=[req.core_lookup_key], active=True, limit=1).data
         if not core:
@@ -250,22 +299,19 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
             line_items.append({"price": scribe[0].id, "quantity": qty})
             applied_bundle = True
 
-        clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
-        customer_id = clinic.get("stripe_customer_id")
-        if not customer_id:
-            cust = stripe.Customer.create(email=user["email"], name=clinic["name"], metadata={"clinic_id": clinic["clinic_id"]})
-            customer_id = cust.id
-            await db.clinics.update_one({"clinic_id": user["clinic_id"]}, {"$set": {"stripe_customer_id": customer_id}})
-
-        trial_days = 14
+        clinic, customer_id, trial_days = await prepare_checkout(user)
+        origin = safe_origin(req.origin_url, request)
+        sub_data = {"metadata": {"clinic_id": clinic["clinic_id"], "lookup_key": req.core_lookup_key}}
+        if trial_days > 0:
+            sub_data["trial_period_days"] = trial_days
         kwargs = dict(
             customer=customer_id,
             line_items=line_items,
             mode="subscription",
-            success_url=f"{req.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{req.origin_url}/app/billing",
+            success_url=f"{origin}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{origin}/app/billing",
             metadata={"clinic_id": clinic["clinic_id"], "lookup_key": req.core_lookup_key, "bundle": "1" if applied_bundle else "0"},
-            subscription_data={"trial_period_days": trial_days, "metadata": {"clinic_id": clinic["clinic_id"]}},
+            subscription_data=sub_data,
         )
         if applied_bundle:
             kwargs["discounts"] = [{"coupon": BUNDLE_COUPON_ID}]
@@ -321,25 +367,22 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
                                   "stripe_payment_intent_id": s.payment_intent,
                                   "updated_at": datetime.now(timezone.utc).isoformat()}},
                     )
-                    # Also mark clinic subscription active
-                    if record.get("clinic_id"):
-                        plan = record.get("lookup_key", "").replace("vetaura_", "").split("_")[0]
-                        await db.clinics.update_one({"clinic_id": record["clinic_id"]}, {"$set": {
-                            "plan": plan or "solo",
-                            "plan_status": "active",
-                            "stripe_subscription_id": s.subscription,
-                        }})
+                    if record.get("clinic_id") and s.subscription:
+                        plan = record.get("lookup_key", "").replace("vetaura_", "").split("_")[0] or "starter"
+                        await sync_subscription(stripe.Subscription.retrieve(s.subscription), record["clinic_id"], plan)
                     record = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
             except stripe.error.StripeError:
                 pass
         return {"session_id": record["session_id"], "status": record["status"], "payment_status": record["payment_status"]}
 
     @stripe_router.post("/payments/portal")
-    async def billing_portal(req: dict, user=Depends(auth_dep)):
+    async def billing_portal(req: dict, request: Request, user=Depends(auth_dep)):
         clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
         if not clinic.get("stripe_customer_id"):
             raise HTTPException(400, "No billing account yet")
-        origin_url = req.get("origin_url", "")
+        if user.get("role", "owner") != "owner":
+            raise HTTPException(403, "Only clinic owners can manage the subscription.")
+        origin_url = safe_origin(req.get("origin_url", ""), request)
         try:
             portal = stripe.billing_portal.Session.create(
                 customer=clinic["stripe_customer_id"],
@@ -359,30 +402,39 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
             raise HTTPException(400, "Invalid signature")
 
         obj, t = event["data"]["object"], event["type"]
-        if t == "checkout.session.completed":
-            await db.payment_transactions.update_one(
-                {"session_id": obj["id"], "payment_status": {"$ne": "paid"}},
-                {"$set": {"status": "completed", "payment_status": obj.get("payment_status", "paid"),
-                          "stripe_subscription_id": obj.get("subscription"),
-                          "stripe_payment_intent_id": obj.get("payment_intent"),
-                          "updated_at": datetime.now(timezone.utc).isoformat()}},
-            )
-            clinic_id = (obj.get("metadata") or {}).get("clinic_id")
-            lookup = (obj.get("metadata") or {}).get("lookup_key", "")
-            if clinic_id:
-                plan = lookup.replace("vetaura_", "").split("_")[0] or "solo"
-                await db.clinics.update_one({"clinic_id": clinic_id}, {"$set": {
-                    "plan": plan,
-                    "plan_status": "active",
-                    "stripe_subscription_id": obj.get("subscription"),
-                }})
-        elif t in ("customer.subscription.deleted", "customer.subscription.paused"):
-            sub_id = obj.get("id")
-            await db.clinics.update_one({"stripe_subscription_id": sub_id}, {"$set": {"plan_status": "canceled"}})
-        elif t == "customer.subscription.updated":
-            sub_id = obj.get("id")
-            status_v = obj.get("status")
-            await db.clinics.update_one({"stripe_subscription_id": sub_id}, {"$set": {"plan_status": status_v}})
+        try:
+            await db.stripe_events.insert_one({"_id": event["id"], "type": t, "at": datetime.now(timezone.utc).isoformat()})
+        except Exception:
+            return {"status": "duplicate"}
+        try:
+            if t == "checkout.session.completed":
+                await db.payment_transactions.update_one(
+                    {"session_id": obj["id"], "payment_status": {"$ne": "paid"}},
+                    {"$set": {"status": "completed", "payment_status": obj.get("payment_status", "paid"),
+                              "stripe_subscription_id": obj.get("subscription"),
+                              "updated_at": datetime.now(timezone.utc).isoformat()}})
+                clinic_id = (obj.get("metadata") or {}).get("clinic_id")
+                plan = (obj.get("metadata") or {}).get("lookup_key", "").replace("vetaura_", "").split("_")[0] or "starter"
+                if clinic_id and obj.get("subscription"):
+                    await sync_subscription(stripe.Subscription.retrieve(obj["subscription"]), clinic_id, plan)
+            elif t in ("customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted",
+                       "customer.subscription.paused", "customer.subscription.resumed"):
+                await sync_subscription(obj)
+            elif t == "customer.subscription.trial_will_end":
+                await sync_subscription(obj)
+                await db.clinics.update_one({"stripe_subscription_id": obj["id"]}, {"$set": {
+                    "billing_notice": f"Your free trial ends on {_iso(obj['trial_end'])[:10]}. Your card will be charged then."}})
+            elif t in ("invoice.paid", "invoice.payment_failed", "invoice.payment_action_required"):
+                sub_id = _sub_id_from_invoice(obj)
+                if sub_id:
+                    await sync_subscription(stripe.Subscription.retrieve(sub_id))
+                if t != "invoice.paid" and sub_id:
+                    await db.clinics.update_one({"stripe_subscription_id": sub_id}, {"$set": {
+                        "billing_notice": "Your last payment didn't go through. Update your card in Manage billing to avoid losing access."}})
+        except Exception as e:
+            await db.stripe_events.delete_one({"_id": event["id"]})
+            logger.exception(f"Stripe webhook {t} failed: {e}")
+            raise HTTPException(500, "Webhook processing failed")
         return {"status": "ok"}
 
     return stripe_router
