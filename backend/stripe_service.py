@@ -9,10 +9,12 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 logger = logging.getLogger(__name__)
 
-stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
-STRIPE_WEBHOOK_SECRET = os.environ["STRIPE_WEBHOOK_SECRET"]
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
+STRIPE_CONFIGURED = bool(stripe.api_key)
+NOT_CONFIGURED_MSG = "Online payments aren't set up yet. Please contact Vetaura support to subscribe."
 
-# Determine SMP eligibility (US -> yes; SaaS is digital)
+# Stripe Managed Payments (merchant of record) countries; SaaS is digital so "full" tax mode applies there.
 SMP_COUNTRIES = {"AU","AT","BE","BG","CA","HR","CY","CZ","DK","EE","FI","FR","DE","GI","GR","HK","HU","IE","IT","JP","LV","LI","LT","LU","MT","NL","NO","PL","PT","RO","SG","SK","SI","ES","SE","CH","GB","US"}
 
 
@@ -62,6 +64,9 @@ BUNDLE_COUPON_PERCENT_OFF = 20.0
 
 def ensure_catalog():
     """Idempotently create Vetaura products + prices + bundle coupon."""
+    if not STRIPE_CONFIGURED:
+        logger.info("Stripe not configured; skipping catalog sync.")
+        return
     try:
         # products & prices
         product_by_lookup: dict[str, str] = {}
@@ -190,6 +195,8 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
 
     async def prepare_checkout(user: dict) -> tuple[dict, str, int]:
         """Owner-only; blocks double subscriptions; carries over remaining in-app trial days."""
+        if not STRIPE_CONFIGURED:
+            raise HTTPException(503, NOT_CONFIGURED_MSG)
         if user.get("role", "owner") != "owner":
             raise HTTPException(403, "Only clinic owners can manage the subscription.")
         clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
@@ -209,6 +216,8 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
     @stripe_router.get("/plans")
     async def list_plans():
         """Public: return plan catalog with Stripe prices for the marketing site."""
+        if not STRIPE_CONFIGURED:
+            raise HTTPException(503, NOT_CONFIGURED_MSG)
         out = []
         for entry in CATALOG:
             for pr in entry["prices"]:
