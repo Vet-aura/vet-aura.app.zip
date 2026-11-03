@@ -91,7 +91,7 @@ export default function Billing() {
             <div className="text-xs uppercase tracking-widest text-slate-500 font-semibold">Current plan</div>
             <div className="mt-1 flex items-center gap-2 flex-wrap">
               <div className="font-serif-display text-2xl font-semibold text-emerald-950 capitalize">Vetaura {clinic.plan}</div>
-              <Badge variant="outline" className="border-emerald-200 text-emerald-800 bg-emerald-50 capitalize">{clinic.plan_status || "trialing"}</Badge>
+              <Badge variant="outline" className="border-emerald-200 text-emerald-800 bg-emerald-50" data-testid="billing-status-badge">{clinic.billing_access === false && ["trialing", "trial"].includes(clinic.plan_status) ? "Trial ended" : ({ trialing: "Trial", trial: "Trial", active: "Active", past_due: "Past due", canceled: "Canceled", unpaid: "Unpaid", paused: "Paused", incomplete: "Incomplete" }[clinic.plan_status] || "Trial")}</Badge>
               {clinic.plan_status === "trialing" && trialLeft > 0 && (
                 <Badge variant="outline" className="border-amber-200 text-amber-800 bg-amber-50">{trialLeft} days left in trial</Badge>
               )}
@@ -206,7 +206,7 @@ export default function Billing() {
         </Card>
       )}
 
-      <div className="text-xs text-slate-500 text-center">Powered by Stripe · test card 4242 4242 4242 4242, any future expiry, any CVC. Prices are per <span className="font-semibold text-slate-800">clinic location</span>. Voice overage: $0.35/min beyond your plan allowance, auto-metered.</div>
+      <div className="text-xs text-slate-500 text-center">Secure checkout by Stripe. Prices are per <span className="font-semibold text-slate-800">clinic location</span>. Voice overage: $0.35/min beyond your plan allowance, auto-metered.</div>
     </div>
   );
 }

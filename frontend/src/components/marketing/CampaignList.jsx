@@ -58,7 +58,7 @@ export function CampaignList({ campaigns, me, isOwner, onChange }) {
               <div className="font-semibold text-emerald-950">{c.name}</div>
               <Badge variant="outline" className={`text-[10px] ${cls}`} data-testid={`campaign-status-${c.id}`}>{label}</Badge>
             </div>
-            <div className="text-xs text-slate-500">{c.recipient_count} recipients · {c.template_name} · by {c.created_by}{c.approved_by ? ` · approved by ${c.approved_by}` : ""}</div>
+            <div className="text-xs text-slate-500">{c.recipient_count} recipient{c.recipient_count === 1 ? "" : "s"} · {c.template_name} · by {c.created_by}{c.approved_by ? ` · approved by ${c.approved_by}` : ""}</div>
             {c.status === "scheduled" && c.scheduled_for && <div className="text-xs text-sky-800 flex items-center gap-1"><Clock className="h-3 w-3" /> Sends after {new Date(c.scheduled_for).toLocaleString()}</div>}
             {c.results && <div className="text-xs text-slate-600" data-testid={`campaign-results-summary-${c.id}`}>{c.results.sent} sent · {c.results.blocked} blocked · {c.results.failed} failed</div>}
             {c.reject_reason && <div className="text-xs text-rose-700">Reason: {c.reject_reason}</div>}

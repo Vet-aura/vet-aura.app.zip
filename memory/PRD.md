@@ -142,6 +142,15 @@ See `/app/memory/test_credentials.md`. Admin cron token: `admin-cron-secret-chan
 - Platform cron `.emergent/crons.yml` every 15 min -> POST /api/cron/sms-dispatch (Bearer WEBHOOK_CRON_SECRET).
 - Note: preview pod egress alternates between 2 IPs, so per-IP tests can look flaky; per-email lockout is the primary guard.
 
+## 2026-11 — Care reminders, blast tests/results, Twilio setup wizard, billing go-live (iterations 11–12)
+- Care reminders (`care_reminders.py`, /app/reminders): care_items per patient (seeded), rules (offsets 14/0/-7, 10:00 local, skip quiet days), hourly cron /api/cron/care-reminders, sparse-unique dedupe_key, retry blocked/failed up to 3x, stale processing recovery.
+- My mobile number with OTP (`phone_verify.py`), blast "Send test to my phone" (owner, verified mobile, 5/blast), blast Results sheet (reach, 7-day replies, opt-outs, 30-day bookings).
+- Twilio setup wizard (`twilio_setup.py`, components/twilio-wizard/*): 7 guided steps (clinic does it themselves), read-only /check and /health, progress saved, webhook URLs. Integrations changes are owner-only.
+- Billing: paywall (HTTP 402 via auth dep; trial/active/past_due 7-day grace), webhook sync for subscription.* / invoice.* / trial_will_end with event idempotency, owner-only checkout/portal, no double subscriptions, remaining trial carried over, safe redirect origins, StripeError -> 503, monthly overage cron.
+- crypto_service no longer auto-generates VETAURA_ENCRYPTION_KEY (root cause of silent key rotation).
+- Stripe managed sandbox key is EXPIRED in preview — user must claim sandbox (Preview → Manage → Payments) to take real payments.
+
+
 ## Backlog (P0/P1/P2)
 - **P1** Reminder automation: vaccine/preventive due dates -> automatic care SMS via clinic number
 - **P1** Human-review path for urgent SMS conversations (already routes to Inbox as tasks)

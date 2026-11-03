@@ -121,6 +121,10 @@ async def get_email_creds(db: AsyncIOMotorDatabase, clinic_id: str) -> Optional[
 def build_credentials_routes(db: AsyncIOMotorDatabase, auth_dep):
     router = APIRouter(prefix="/api/integrations")
 
+    def _owner(user: dict):
+        if user.get("role", "owner") != "owner":
+            raise HTTPException(403, "Only clinic owners can change integrations.")
+
     @router.get("/twilio")
     async def get_twilio(user=Depends(auth_dep)):
         doc = await db.twilio_credentials.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
@@ -132,13 +136,14 @@ def build_credentials_routes(db: AsyncIOMotorDatabase, auth_dep):
             "api_key_sid_masked": mask(doc["api_key_sid"], keep=4),
             "messaging_service_sid": doc.get("messaging_service_sid"),
             "friendly_name": doc.get("friendly_name"),
-            "webhook_token": doc.get("webhook_token"),
+            "webhook_token": doc.get("webhook_token") if user.get("role", "owner") == "owner" else None,
             "updated_at": doc.get("updated_at"),
             "verified_at": doc.get("verified_at"),
         }
 
     @router.post("/twilio")
     async def set_twilio(req: TwilioCredsReq, user=Depends(auth_dep)):
+        _owner(user)
         # Validate live by fetching the account via the API Key auth.
         friendly: str = ""
         try:
@@ -182,6 +187,7 @@ def build_credentials_routes(db: AsyncIOMotorDatabase, auth_dep):
 
     @router.post("/twilio/rotate-webhook-token")
     async def rotate_webhook_token(user=Depends(auth_dep)):
+        _owner(user)
         token = secrets.token_urlsafe(32)
         r = await db.twilio_credentials.update_one(
             {"clinic_id": user["clinic_id"]},
@@ -193,6 +199,7 @@ def build_credentials_routes(db: AsyncIOMotorDatabase, auth_dep):
 
     @router.delete("/twilio")
     async def delete_twilio(user=Depends(auth_dep)):
+        _owner(user)
         await db.twilio_numbers.delete_many({"clinic_id": user["clinic_id"]})
         await db.twilio_credentials.delete_one({"clinic_id": user["clinic_id"]})
         return {"ok": True}
@@ -215,6 +222,7 @@ def build_credentials_routes(db: AsyncIOMotorDatabase, auth_dep):
 
     @router.post("/email")
     async def set_email(req: EmailCredsReq, user=Depends(auth_dep)):
+        _owner(user)
         # Best-effort validation: call a low-privilege endpoint.
         try:
             import httpx
@@ -247,6 +255,7 @@ def build_credentials_routes(db: AsyncIOMotorDatabase, auth_dep):
 
     @router.delete("/email")
     async def delete_email(user=Depends(auth_dep)):
+        _owner(user)
         await db.email_credentials.delete_one({"clinic_id": user["clinic_id"]})
         return {"ok": True}
 

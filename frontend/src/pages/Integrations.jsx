@@ -105,7 +105,7 @@ export default function Integrations() {
               <div><span className="text-slate-500 text-xs">Account SID</span><div className="font-mono-clinical">{tw.account_sid_masked}</div></div>
               <div><span className="text-slate-500 text-xs">API Key SID</span><div className="font-mono-clinical">{tw.api_key_sid_masked}</div></div>
               <div><span className="text-slate-500 text-xs">Messaging Service SID</span><div className="font-mono-clinical">{tw.messaging_service_sid || <span className="text-amber-700">Not set. Add one so SMS goes through your approved campaign.</span>}</div></div>
-              <div><span className="text-slate-500 text-xs">Last verified</span><div className="font-mono-clinical text-slate-800">{tw.verified_at?.slice(0, 19).replace("T", " ")}Z</div></div>
+              <div><span className="text-slate-500 text-xs">Last verified</span><div className="font-mono-clinical text-slate-800">{tw.verified_at ? `${tw.verified_at.slice(0, 19).replace("T", " ")}Z` : "—"}</div></div>
             </div>
             <CheckResults checks={health} />
             <div className="flex flex-wrap gap-2">
@@ -175,7 +175,7 @@ export default function Integrations() {
               <div><span className="text-slate-500 text-xs">Provider</span><div>{em.provider}</div></div>
               <div><span className="text-slate-500 text-xs">API key</span><div className="font-mono-clinical">{em.api_key_masked}</div></div>
               <div><span className="text-slate-500 text-xs">From</span><div>{em.from_name ? `${em.from_name} <${em.from_email}>` : em.from_email}</div></div>
-              <div><span className="text-slate-500 text-xs">Verified</span><div className="font-mono-clinical text-slate-800">{em.verified_at?.slice(0, 19).replace("T", " ")}Z</div></div>
+              <div><span className="text-slate-500 text-xs">Verified</span><div className="font-mono-clinical text-slate-800">{em.verified_at ? `${em.verified_at.slice(0, 19).replace("T", " ")}Z` : "—"}</div></div>
             </div>
             <Button variant="outline" onClick={disconnectEmail} className="rounded-full border-rose-200 text-rose-700 hover:bg-rose-50 text-xs">
               <Trash2 className="h-3 w-3 mr-1.5" /> Disconnect

@@ -9,8 +9,8 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 logger = logging.getLogger(__name__)
 
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
-STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
+STRIPE_WEBHOOK_SECRET = os.environ["STRIPE_WEBHOOK_SECRET"]
 
 # Determine SMP eligibility (US -> yes; SaaS is digital)
 SMP_COUNTRIES = {"AU","AT","BE","BG","CA","HR","CY","CZ","DK","EE","FI","FR","DE","GI","GR","HK","HU","IE","IT","JP","LV","LI","LT","LU","MT","NL","NO","PL","PT","RO","SG","SK","SI","ES","SE","CH","GB","US"}
@@ -227,12 +227,12 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
 
     @stripe_router.post("/payments/checkout")
     async def checkout(req: CheckoutReq, request: Request, user=Depends(auth_dep)):
+        clinic, customer_id, trial_days = await prepare_checkout(user)
         prices = stripe.Price.list(lookup_keys=[req.lookup_key], active=True, limit=1).data
         if not prices:
             raise HTTPException(400, f"Plan not found: {req.lookup_key}")
         price = prices[0]
 
-        clinic, customer_id, trial_days = await prepare_checkout(user)
         origin = safe_origin(req.origin_url, request)
         sub_data = {"metadata": {"clinic_id": clinic["clinic_id"], "lookup_key": req.lookup_key}}
         if trial_days > 0:
@@ -263,10 +263,7 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
                 session = stripe.checkout.Session.create(**kwargs, automatic_tax={"enabled": True}, billing_address_collection="required")
         except stripe.error.StripeError as e:
             logger.error(f"Stripe checkout error: {e}")
-            raise HTTPException(500, "Stripe checkout error")
-
-        if session is None:
-            raise HTTPException(500, "Stripe checkout error")
+            raise
 
         await db.payment_transactions.insert_one({
             "session_id": session.id,
@@ -284,6 +281,7 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
     @stripe_router.post("/payments/checkout-bundle")
     async def checkout_bundle(req: BundleCheckoutReq, request: Request, user=Depends(auth_dep)):
         """Attach the Scribe add-on to any core plan in a single checkout with a 20% bundle discount."""
+        clinic, customer_id, trial_days = await prepare_checkout(user)
         core = stripe.Price.list(lookup_keys=[req.core_lookup_key], active=True, limit=1).data
         if not core:
             raise HTTPException(400, f"Plan not found: {req.core_lookup_key}")
@@ -294,12 +292,10 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
         if req.attach_scribe:
             scribe = stripe.Price.list(lookup_keys=["vetaura_scribe_addon_monthly"], active=True, limit=1).data
             if not scribe:
-                raise HTTPException(500, "Scribe add-on not configured")
+                raise HTTPException(503, "The Scribe add-on isn't available right now. Please try again shortly.")
             qty = max(1, min(20, int(req.scribe_quantity or 1)))
             line_items.append({"price": scribe[0].id, "quantity": qty})
             applied_bundle = True
-
-        clinic, customer_id, trial_days = await prepare_checkout(user)
         origin = safe_origin(req.origin_url, request)
         sub_data = {"metadata": {"clinic_id": clinic["clinic_id"], "lookup_key": req.core_lookup_key}}
         if trial_days > 0:
@@ -332,10 +328,7 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
                 session = stripe.checkout.Session.create(**kwargs, automatic_tax={"enabled": True}, billing_address_collection="required")
         except stripe.error.StripeError as e:
             logger.error(f"Stripe bundle checkout error: {e}")
-            raise HTTPException(500, "Stripe checkout error")
-
-        if session is None:
-            raise HTTPException(500, "Stripe checkout error")
+            raise
 
         await db.payment_transactions.insert_one({
             "session_id": session.id,
@@ -377,20 +370,17 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
 
     @stripe_router.post("/payments/portal")
     async def billing_portal(req: dict, request: Request, user=Depends(auth_dep)):
+        if user.get("role", "owner") != "owner":
+            raise HTTPException(403, "Only clinic owners can manage the subscription.")
         clinic = await db.clinics.find_one({"clinic_id": user["clinic_id"]}, {"_id": 0})
         if not clinic.get("stripe_customer_id"):
             raise HTTPException(400, "No billing account yet")
-        if user.get("role", "owner") != "owner":
-            raise HTTPException(403, "Only clinic owners can manage the subscription.")
         origin_url = safe_origin(req.get("origin_url", ""), request)
-        try:
-            portal = stripe.billing_portal.Session.create(
-                customer=clinic["stripe_customer_id"],
-                return_url=f"{origin_url}/app/billing",
-            )
-            return {"portal_url": portal.url}
-        except stripe.error.StripeError as e:
-            raise HTTPException(500, str(e))
+        portal = stripe.billing_portal.Session.create(
+            customer=clinic["stripe_customer_id"],
+            return_url=f"{origin_url}/app/billing",
+        )
+        return {"portal_url": portal.url}
 
     @stripe_router.post("/stripe/webhook")
     async def webhook(request: Request):

@@ -1,0 +1,60 @@
+{
+  "summary": "Iteration 12: tested the Twilio setup wizard (backend and UI), the billing paywall, Stripe webhook sync, checkout/portal safety, billing cron auth and the iteration 11 regressions. Backend: 32 of 36 pytest tests pass (existing test_iter12_twilio_setup.py 20/20; new test_iter12_billing.py 11/14; test_iter12_twilio_roles.py 0/1). Frontend: the wizard flows for a fresh owner and for vet1 (connected) all work, the paywall redirect works, the Billing banners (past-due, notice, renewal, unavailable) work, and the mobile 390px layout has no page overflow. Four real defects: (1) non-owners can disconnect Twilio and rotate its webhook token; (2) the portal returns 500 and leaks Stripe's error text; (3) the checkout owner and double-subscription guards run after a Stripe call; (4) two checkout error paths still return 500.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "DELETE /api/integrations/twilio, POST /api/integrations/twilio/rotate-webhook-token, POST /api/integrations/twilio (credentials_service.py)", "issue": "There is no owner check. A reception user got 200 on DELETE (disconnected the clinic's Twilio) and 200 on rotate-webhook-token. Save only failed with 400 because the fake creds were rejected by Twilio; with real creds a non-owner could replace the clinic's credentials. GET /api/integrations/twilio also returns webhook_token to non-owners. The wizard's PUT /setup, /check and /health correctly return 403, so this is inconsistent. Same pattern is likely on the /api/integrations/email POST and DELETE routes.", "priority": "HIGH"},
+      {"endpoint": "POST /api/payments/portal", "issue": "Catches StripeError and raises HTTPException(500, str(e)). With the expired key it returns 500 {detail: 'Expired API Key provided: sk_test_***...sxNs'}, which leaks Stripe internals and the key suffix. It should return the 503 'Payments are temporarily unavailable' message, for example by re-raising or removing the try/except. The 400 'No billing account yet' check also runs before the owner check.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/payments/checkout and /checkout-bundle", "issue": "stripe.Price.list runs before prepare_checkout(). Because of that a non-owner gets 503 instead of 403, and a clinic that already has an active subscription gets 503 instead of 400. With a working key the guard still runs, but only after a Stripe round trip. Call prepare_checkout's role and double-subscription checks before any Stripe call."},
+      {"endpoint": "POST /api/payments/checkout and /checkout-bundle", "issue": "The inner `except stripe.error.StripeError` still raises HTTPException(500, 'Stripe checkout error'), and 'Scribe add-on not configured' is also a 500. These paths bypass the global 503 handler."},
+      {"endpoint": "stripe_service.py module level", "issue": "Falls back to stripe.api_key 'sk_test_emergent' and STRIPE_WEBHOOK_SECRET '' when the env vars are missing. Going live should fail fast instead, same as crypto_service."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Integrations Twilio connected summary", "issue": "'Last verified' shows a lone 'Z' when verified_at is missing (vet1's seeded creds). The template appends 'Z' even when the value is undefined. The email card's 'Verified' line has the same bug.", "selector": "Integrations.jsx line 108/178", "priority": "LOW"},
+      {"component": "Marketing campaign card", "issue": "Shows '1 recipients'; it should say '1 recipient'.", "selector": "CampaignList", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Billing", "issues": ["The status badge shows raw values such as 'Past_due', and an expired trial still shows 'Trialing' next to the rose paywall banner; use friendly labels such as 'Past due' and 'Trial ended'.", "The 'Manage billing' button shows when there is no stripe_customer_id, and clicking it would return 400. Hide or disable it.", "The footer says 'Powered by Stripe · test card 4242 4242 4242 4242...'. Remove the test-card copy before going live."]}
+    ]
+  },
+  "passed_tests": [
+    "Twilio setup GET/PUT/check/health, owner-only rules, unknown-key filtering, step order, 422 on bad SID format, throttle 429, health 400 when not connected and recorded last_checks when connected (test_iter12_twilio_setup.py)",
+    "Iteration 11 regressions: mobile/start counts failed sends (6th start -> 429), reminder retries up to 3 attempts, manual run does not set last_run_date, stale 'processing' becomes failed, timestamp parser, exactly one VETAURA_ENCRYPTION_KEY line in .env and crypto_service fails fast",
+    "Paywall: expired account gets 402 on /api/patients, 200 on /api/clinic, billing_access=false; /api/me is exempt; vet1 gets 200; unit tests of the clinic_has_access rules pass",
+    "Webhook: bad or missing signature -> 400; a valid signature syncs plan_status, sub id, customer id, current_period_end, cancel_at_period_end and trial_ends_at; a repeated event id -> duplicate; trial_will_end sets billing_notice; past_due_since is set once and not overwritten; active clears past_due_since and billing_notice; subscription.deleted -> canceled -> 402; past due for 8 days -> 402",
+    "GET /api/plans and owner checkout return 503 (not 500) with the expired key",
+    "Billing cron: no token, a wrong token or a wrong admin token -> 403; Bearer WEBHOOK_CRON_SECRET or X-Admin-Token -> 200",
+    "UI: expired user is redirected from /app, /app/patients and /app/inbox to /app/billing, which shows billing-paywall and billing-unavailable; /app/settings stays reachable",
+    "UI: Billing page shows billing-past-due and billing-renewal for a past_due clinic, and billing-notice plus 'First charge on' for a trialing clinic",
+    "UI fresh owner: wizard shows directly (0/7); mark-done persists across reload (2/7 with checkmarks); Back works; a2p step shows 3 samples, opt-in text and external links; webhooks step shows tw-webhooks-pending; connect button stays disabled; Test connection shows credentials data-status=fail with a plain-English Twilio 70051 message; a bad SID shows a toast",
+    "UI vet1: summary has health, guide, rotate and disconnect buttons; Run health check shows a fail result (20003); the guide shows 3 webhook rows with copy buttons; the connect step shows the Next button",
+    "Mobile 390px: page scrollWidth is 390, the stepper scrolls inside itself (overflow-x auto), and no elements overflow",
+    "Settings MyMobileCard keeps typed input after the GET resolves"
+  ],
+  "test_report_links": ["/app/backend/tests/test_iter12_billing.py", "/app/backend/tests/test_iter12_twilio_setup.py", "/app/backend/tests/test_iter12_twilio_roles.py", "/app/test_reports/pytest/iter12_billing.xml"],
+  "action_items": [
+    "Add owner-only checks (403) to POST/DELETE /api/integrations/twilio and /twilio/rotate-webhook-token, and to the email credential mutations. Consider hiding webhook_token from non-owners in GET.",
+    "Make /api/payments/portal return 503 (stop returning str(StripeError)) and run the owner check before the customer-id check.",
+    "In checkout and checkout-bundle, run prepare_checkout's role and double-subscription guards before stripe.Price.list, and replace the inner 500 'Stripe checkout error' with 503.",
+    "Fail fast in stripe_service when STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET is missing (no 'sk_test_emergent' or empty-secret fallback).",
+    "Cosmetic: fix the lone 'Z' in Last verified, use friendly Billing status labels, hide 'Manage billing' when there is no Stripe customer, remove the test-card footer for go-live, and pluralize 'recipient(s)'."
+  ],
+  "critical_code_review_comments": [
+    "credentials_service.build_credentials_routes has no role checks at all, while twilio_setup.py does. Centralize an owner_dep so mutation routes can't be added without one.",
+    "Webhook dedupe (insert stripe_events first, delete on failure) is sound. sync_subscription uses metadata.clinic_id or falls back to the sub id, which is correct.",
+    "clinic_has_access treats past_due with no past_due_since as allowed indefinitely. Acceptable, but consider a status-based fallback.",
+    "The paywall depends on the frontend 402 interceptor plus the AppShell redirect. Both verified working."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter12_billing.py"],
+  "success_rate": {"backend": "89% (32/36)", "frontend": "100% of requested flows (only cosmetic issues)"},
+  "seed_data_creation": "Created throwaway clinics/users (test_iter12_bill*, test_iter12_billrec*, test_iter12_ui_367322) and deleted them by id. For the UI run I set expired clinic_ba9f0696f489 to onboarded=true temporarily and restored it to false; its plan_status=trialing, trial_ends_at=2026-01-01 and lack of a sub id or past_due_since were never changed. Pre-existing leftovers that I did not create (likely the main agent's): users test_iter12_ui@example.com and test_iter12_rec@example.com, and clinics clinic_4d956a990903 and clinic_4c78a83c125f.",
+  "test_credentials": "Taken from /app/memory/test_credentials.md and working. Note: expired@example.com has onboarded=false, so logging in lands on /onboarding first; the paywall only shows after onboarding is completed.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run with: set -a; . /app/backend/.env; . /app/frontend/.env; set +a; pytest tests/test_iter12_billing.py -n 0. The 3 checkout/portal failures and the twilio_roles failure are real bugs, not flaky. The Stripe key is expired, so the expected response is 503. Use a normal User-Agent with requests. Expired account: onboarded=false sends you to onboarding before the paywall.",
+  "rca of the issue": "Twilio role bypass: credentials_service routes depend only on auth_dep, with no role check. Portal 500: a local try/except converts StripeError into HTTPException(500, str(e)), which preempts the global 503 handler. Checkout 403/400 guards are masked because prepare_checkout() is called after stripe.Price.list(), so the Stripe auth failure raises first."
+}
