@@ -40,10 +40,11 @@ def build_phone_verify_routes(db: AsyncIOMotorDatabase, auth_dep):
         if not phone.startswith("+") or len(phone) < 11:
             raise HTTPException(400, "Enter a full mobile number, e.g. (415) 555-0142 or +14155550142.")
         now = datetime.now(timezone.utc)
-        recent = await db.phone_verifications.count_documents(
-            {"user_id": user["user_id"], "created_at": {"$gte": (now - timedelta(hours=1)).isoformat()}})
+        recent = await db.phone_verify_attempts.count_documents(
+            {"user_id": user["user_id"], "at": {"$gte": (now - timedelta(hours=1)).isoformat()}})
         if recent >= MAX_STARTS_PER_HOUR:
             raise HTTPException(429, "Too many codes requested. Try again in an hour.")
+        await db.phone_verify_attempts.insert_one({"user_id": user["user_id"], "phone": phone, "at": now.isoformat()})
         code = f"{secrets.randbelow(10**6):06d}"
         doc = {"user_id": user["user_id"], "clinic_id": user["clinic_id"], "phone": phone,
                "code_hash": code_hash(user["user_id"], code), "attempts": 0, "used": False,

@@ -56,9 +56,9 @@ export function CampaignResultsSheet({ campaignId, onClose }) {
         {s && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-5">
             <Stat label="Reached" value={s.sent} sub={`of ${s.recipients}`} tid="results-sent" />
-            <Stat label="Replied" value={`${s.reply_rate}%`} sub={`${s.replied} clients`} tid="results-replied" />
-            <Stat label="Booked" value={`${s.booking_rate}%`} sub={`${s.booked} clients`} tid="results-booked" />
-            <Stat label="Opted out" value={`${s.opt_out_rate}%`} sub={`${s.opted_out} clients`} tid="results-opted-out" />
+            <Stat label="Replied" value={`${s.reply_rate}%`} sub={`${s.replied} client${s.replied === 1 ? "" : "s"}`} tid="results-replied" />
+            <Stat label="Booked" value={`${s.booking_rate}%`} sub={`${s.booked} client${s.booked === 1 ? "" : "s"}`} tid="results-booked" />
+            <Stat label="Opted out" value={`${s.opt_out_rate}%`} sub={`${s.opted_out} client${s.opted_out === 1 ? "" : "s"}`} tid="results-opted-out" />
           </div>
         )}
         {s && (s.blocked > 0 || s.failed > 0) && <div className="text-xs text-slate-500 mt-2" data-testid="results-not-reached">{s.blocked} blocked · {s.failed} failed</div>}

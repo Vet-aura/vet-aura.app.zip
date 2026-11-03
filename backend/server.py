@@ -32,6 +32,7 @@ from login_security import LoginGuard, build_security_routes
 from sms_campaigns import build_campaign_routes
 from care_reminders import build_reminder_routes
 from phone_verify import build_phone_verify_routes
+from twilio_setup import build_twilio_setup_routes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("vetaura")
@@ -1070,6 +1071,7 @@ app.include_router(build_twilio_routes(
     create_task_fn=create_task,
     transcribe_audio_fn=transcribe_audio,
 ))
+app.include_router(build_twilio_setup_routes(db, auth_dep, os.environ.get("PUBLIC_APP_URL", "")))
 app.include_router(build_credentials_routes(db, auth_dep))
 app.include_router(build_compliance_routes(db, auth_dep))
 app.include_router(build_invitation_routes(db, auth_dep, lambda: os.environ.get("PUBLIC_APP_URL", "")))

@@ -1,0 +1,49 @@
+{
+  "summary": "Iter-11: Care Reminder automation, phone verification, blast test-send and blast results. Backend: 13 new pytest tests (care items CRUD + clinic scoping, seeded items + signup seeding, settings defaults/validation/owner-only, upcoming/run/dedupe/complete, blocked vs failed(Twilio 401), body format, cron auth/dedupe, cron background gating on send_hour/quiet day/last_run_date, /me/mobile start/verify/rate-limit/lockout/replay/delete, campaign test-send rules + 5 limit, results attribution with 7d reply/30d booking windows) -> all pass after fixing an ENV bug. Regression iter10+iter8: 46/47 pass (only test_ip_limit_and_xff_spoof failed — known flaky because preview egress uses 2 IPs). Frontend: Reminders page (rules, chips, send hour, template validation toast, Run now toast, Next 30 days w/ No care consent badges, Send log), Patient Care due tab (add/done/delete), Settings My mobile number (invalid phone + Twilio 401 toasts, Verified badge), Marketing (Send test to my phone -> 'Verify mobile first' and 'Test send failed: HTTP 401' toasts, Results sheet stats and rows correct), non-owner read-only rules / no Run now / no test button — all working.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "ALL Twilio-using endpoints (/api/reminders/run, /api/me/mobile/start, campaign /test, blast dispatch)", "issue": "ENV BUG (fixed by me): /app/backend/.env contained 4 VETAURA_ENCRYPTION_KEY lines. python-dotenv takes the LAST one, but stored twilio_credentials were encrypted with the FIRST -> decrypt failed (InvalidToken) -> get_twilio_creds returned None -> sends logged 'Twilio Messaging Service is not connected.' instead of reaching Twilio. Root cause: crypto_service._load_or_create_key() appends a NEW key to .env whenever crypto_service is imported without the env loaded (e.g. `python -c 'import care_reminders'` / lint scripts from /app/backend). Each such import silently rotates the key on next backend restart, bricking every clinic's stored secrets.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/me/mobile/start", "issue": "Rate limit counts only phone_verifications docs; failed Twilio sends delete their doc, so failed starts are never counted (unlimited Twilio API calls when send fails). Count attempts separately."},
+      {"endpoint": "POST /api/reminders/run + scheduler", "issue": "A 'blocked' (no consent) or 'failed' (transient Twilio error) send permanently consumes the (item, stage) slot via the unique index — owner who opts in tomorrow, or a Twilio outage, means that stage is never retried. Consider allowing retry for failed / for blocked-then-consented."},
+      {"endpoint": "POST /api/reminders/run", "issue": "Manual run sets last_run_date=today, so the scheduled run that day is skipped; items added between a morning manual run and send_hour wait until tomorrow."},
+      {"endpoint": "GET /api/sms/marketing/campaigns/{id}/results", "issue": "Reply detection uses find_one on receptionist_sessions (only first session per number checked) and lexicographic ISO string comparison (mixed 'Z' vs '+00:00' formats could misorder). N+1 queries per recipient (4 queries each) — slow for big blasts."},
+      {"endpoint": "reminder_sends", "issue": "If process crashes between insert (status 'processing') and update, record stays 'processing' forever and the stage is never sent."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "CampaignList", "issue": "Duplicate data-testid campaign-results-{id} on both the Results button and the results summary text (fixed: summary renamed to campaign-results-summary-{id}).", "selector": "[data-testid^='campaign-results-']", "priority": "LOW"},
+      {"component": "MyMobileCard", "issue": "Race: GET /me/mobile resolving after the user starts typing resets the input to '' (setPhone(r.data.phone || '')). Reproduced in Playwright when filling immediately after page load.", "selector": "[data-testid='my-mobile-input']", "priority": "LOW"},
+      {"component": "CampaignList test send", "issue": "After a FAILED test send the list isn't refreshed (onChange only called on success), so the 'N tests sent · last failed' line only appears after reload. Wording '1 test sent' is misleading when it failed.", "selector": "[data-testid^='campaign-tests-']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Patient detail > Care due", "issues": ["Uses native <input type='date'> instead of shadcn Calendar/Popover date picker", "Shows 'No care items yet.' flash before items load (no loading state)", "Delete has no confirmation"]},
+      {"screen": "Campaign results sheet", "issues": ["'1 clients' pluralisation"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter11_reminders_verify_results.py", "/app/backend/tests/test_iter11_cron_schedule.py", "/app/backend/tests/ui_seed_iter11.py", "/app/test_reports/pytest/pytest_iter11.xml"],
+  "action_items": [
+    "CRITICAL: make crypto_service never auto-append keys to .env (fail fast if VETAURA_ENCRYPTION_KEY missing, or call load_dotenv inside crypto_service before reading). Never run module imports from /app/backend without env loaded. Verify .env has exactly ONE VETAURA_ENCRYPTION_KEY (I kept the first, which decrypts existing creds, and restarted backend).",
+    "Count failed /me/mobile/start attempts toward the 5/hour limit",
+    "Decide retry policy for blocked/failed reminder stages (currently permanent)",
+    "MyMobileCard: don't overwrite user-typed phone on late load; refresh campaign list after failed test send",
+    "Optional: shadcn date picker in CareItemsPanel; loading state; pluralisation in results sheet"
+  ],
+  "critical_code_review_comments": [
+    "crypto_service._load_or_create_key appending to .env at import time is a footgun that already corrupted this environment (4 keys).",
+    "results(): 4 DB queries per recipient — batch with $in queries for large campaigns.",
+    "send_test pushes failed attempts and counts them toward the 5-test cap — OK, but UI should reflect remaining tests.",
+    "Frontend DueBadge computes days in browser timezone while backend uses clinic timezone — can be off by one near midnight."
+  ],
+  "updated_files": ["/app/backend/.env (removed 3 duplicate VETAURA_ENCRYPTION_KEY lines; backend restarted)", "/app/frontend/src/components/marketing/CampaignList.jsx (testid rename)", "/app/backend/tests/test_iter11_reminders_verify_results.py", "/app/backend/tests/test_iter11_cron_schedule.py", "/app/backend/tests/ui_seed_iter11.py"],
+  "success_rate": {"backend": "100% of iter11 tests (13/13) after env fix; regression 46/47 (1 known-flaky IP limit)", "frontend": "100% of tested flows"},
+  "test_credentials": "vet1@example.com / owner2@example.com / vet2@example.com, password strongpass123 (from /app/memory/test_credentials.md). Non-owner tested via temporary TEST tech user (deleted).",
+  "seed_data_creation": "All TEST_ data cleaned (care items, campaigns, sessions, consent events, appointments, phone_verifications, temp users, vet1 mobile fields). vet1 seeded care items now have 4 'blocked' reminder_sends (Run now executed); clear reminder_sends if a fresh demo log is desired.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "pytest.ini adds xdist (-n); iter11 tests share vet1 state so run with `-o addopts=\"\"` (serial). Export env first: set -a; . /app/backend/.env; . /app/frontend/.env. Success-path SMS cannot be tested (fake Twilio -> 401). ui_seed_iter11.py seed|clean creates a completed blast with reply/opt-out/booking attribution + a pending blast created by owner2.",
+  "rca of the issue": "Symptom: care reminder with consent logged failed 'Twilio Messaging Service is not connected.' instead of Twilio 401. Repro: decrypt(twilio_credentials.api_key_secret_encrypted) -> InvalidToken; .env had 4 VETAURA_ENCRYPTION_KEY entries, only the first decrypts. Cause: crypto_service writes a fresh key to .env when imported with no env var; dotenv uses last value after restart. Mitigation applied: kept first key, removed duplicates, restarted backend; all Twilio paths now reach Twilio (401 as expected)."
+}

@@ -16,7 +16,7 @@ export function MyMobileCard() {
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(() => api.get("/me/mobile").then((r) => { setState(r.data); setPhone(r.data.phone || ""); }).catch(() => {}), []);
+  const load = useCallback(() => api.get("/me/mobile").then((r) => { setState(r.data); setPhone((cur) => cur || r.data.phone || ""); }).catch(() => {}), []);
   useEffect(() => { load(); }, [load]);
 
   async function start() {

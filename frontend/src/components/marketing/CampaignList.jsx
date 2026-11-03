@@ -43,7 +43,7 @@ export function CampaignList({ campaigns, me, isOwner, onChange }) {
       if (action === "test") toast.success(`Test sent to ${data.to}.`);
       if (action === "approve") toast.success(data.status === "scheduled" ? "Approved — queued until quiet hours end." : "Approved — sending now.");
       onChange();
-    } catch (e) { toast.error(errMsg(e, "Action failed.")); }
+    } catch (e) { toast.error(errMsg(e, "Action failed.")); if (action === "test") onChange(); }
   }
 
   return (
@@ -60,9 +60,9 @@ export function CampaignList({ campaigns, me, isOwner, onChange }) {
             </div>
             <div className="text-xs text-slate-500">{c.recipient_count} recipients · {c.template_name} · by {c.created_by}{c.approved_by ? ` · approved by ${c.approved_by}` : ""}</div>
             {c.status === "scheduled" && c.scheduled_for && <div className="text-xs text-sky-800 flex items-center gap-1"><Clock className="h-3 w-3" /> Sends after {new Date(c.scheduled_for).toLocaleString()}</div>}
-            {c.results && <div className="text-xs text-slate-600" data-testid={`campaign-results-${c.id}`}>{c.results.sent} sent · {c.results.blocked} blocked · {c.results.failed} failed</div>}
+            {c.results && <div className="text-xs text-slate-600" data-testid={`campaign-results-summary-${c.id}`}>{c.results.sent} sent · {c.results.blocked} blocked · {c.results.failed} failed</div>}
             {c.reject_reason && <div className="text-xs text-rose-700">Reason: {c.reject_reason}</div>}
-            {(c.tests || []).length > 0 && <div className="text-xs text-slate-500" data-testid={`campaign-tests-${c.id}`}>{c.tests.length} test{c.tests.length > 1 ? "s" : ""} sent · last {c.tests[c.tests.length - 1].status} to {c.tests[c.tests.length - 1].to}</div>}
+            {(c.tests || []).length > 0 && <div className="text-xs text-slate-500" data-testid={`campaign-tests-${c.id}`}>{c.tests.length} test attempt{c.tests.length > 1 ? "s" : ""} · last {c.tests[c.tests.length - 1].status === "sent" ? "delivered to Twilio" : "failed"} ({c.tests[c.tests.length - 1].to})</div>}
             <Actions c={c} me={me} isOwner={isOwner} act={act} openResults={setResultsId} />
           </div>
         );

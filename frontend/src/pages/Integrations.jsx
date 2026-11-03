@@ -5,21 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PhoneCall, Mail, RotateCcw, Trash2, ShieldCheck, KeyRound, Copy, ExternalLink, Info, Sparkles } from "lucide-react";
+import { PhoneCall, Mail, RotateCcw, Trash2, ShieldCheck, Sparkles, BookOpen } from "lucide-react";
+import { useAuth } from "@/context/AuthProvider";
+import { TwilioSetupWizard } from "@/components/twilio-wizard/TwilioSetupWizard";
+import { CheckResults } from "@/components/twilio-wizard/CheckResults";
 import { toast } from "sonner";
-
-const TWILIO_HELP = [
-  { step: "1", label: "Create a Twilio account and add a payment method", href: "https://www.twilio.com/try-twilio" },
-  { step: "2", label: "Purchase (or port) a U.S. 10-digit long code phone number", href: "https://console.twilio.com/us1/develop/phone-numbers/manage/incoming" },
-  { step: "3", label: "Create a Messaging Service and attach your number", href: "https://console.twilio.com/us1/develop/sms/services" },
-  { step: "4", label: "Register your Brand and Campaign for A2P 10DLC (Customer Care)", href: "https://console.twilio.com/us1/develop/sms/regulatory-compliance/brands" },
-  { step: "5", label: "Create a RESTRICTED API key (not the Auth Token) and paste it below", href: "https://console.twilio.com/us1/account/keys-credentials/api-keys" },
-];
 
 export default function Integrations() {
   const [tw, setTw] = useState(null);
   const [em, setEm] = useState(null);
-  const [twForm, setTwForm] = useState({ account_sid: "", api_key_sid: "", api_key_secret: "", messaging_service_sid: "" });
+  const { user } = useAuth();
+  const isOwner = (user?.role || "owner") === "owner";
+  const [showGuide, setShowGuide] = useState(false);
+  const [health, setHealth] = useState(null);
   const [emForm, setEmForm] = useState({ provider: "resend", api_key: "", from_email: "", from_name: "" });
   const [busy, setBusy] = useState(null);
 
@@ -31,31 +29,24 @@ export default function Integrations() {
   }
   useEffect(() => { load(); }, []);
 
-  async function saveTwilio() {
-    if (!twForm.account_sid.startsWith("AC") || !twForm.api_key_sid.startsWith("SK") || twForm.api_key_secret.length < 8) {
-      return toast.info("Enter your Account SID (AC…), API Key SID (SK…), and API Key Secret.");
-    }
-    setBusy("twilio");
-    try {
-      const { data } = await api.post("/integrations/twilio", twForm);
-      toast.success(`Connected to ${data.friendly_name}`);
-      setTwForm({ account_sid: "", api_key_sid: "", api_key_secret: "", messaging_service_sid: "" });
-      await load();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not connect Twilio.");
-    } finally { setBusy(null); }
+  async function runHealth() {
+    setBusy("health");
+    try { setHealth((await api.post("/integrations/twilio/health")).data.checks); }
+    catch (e) { toast.error(typeof e?.response?.data?.detail === "string" ? e.response.data.detail : "Health check failed."); }
+    finally { setBusy(null); }
   }
   async function disconnectTwilio() {
     if (!confirm("Disconnect Twilio? Inbound calls and SMS will stop.")) return;
-    await api.delete("/integrations/twilio").catch(() => {});
-    toast.success("Twilio disconnected");
+    try { await api.delete("/integrations/twilio"); toast.success("Twilio disconnected"); }
+    catch { toast.error("Couldn't disconnect Twilio."); }
+    setHealth(null);
     await load();
   }
   async function rotateWebhookToken() {
     setBusy("rotate");
     try {
       await api.post("/integrations/twilio/rotate-webhook-token");
-      toast.success("Webhook URLs rotated. Update Twilio Console with the new URLs.");
+      toast.success("Webhook URLs rotated. Paste the new URLs from the setup guide into Twilio.");
       await load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Rotation failed.");
@@ -81,8 +72,6 @@ export default function Integrations() {
     await load();
   }
 
-  const copy = (t) => { navigator.clipboard.writeText(t); toast.success("Copied"); };
-
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 space-y-6">
       <div>
@@ -105,68 +94,33 @@ export default function Integrations() {
           )}
         </div>
 
-        {!tw?.connected ? (
+        {!tw?.connected || showGuide ? (
           <>
-            <div className="mb-5 grid sm:grid-cols-2 gap-2">
-              {TWILIO_HELP.map((s) => (
-                <a key={s.step} href={s.href} target="_blank" rel="noreferrer" className="flex items-start gap-2 text-xs text-slate-700 hover:text-emerald-800 border border-emerald-100 rounded-xl p-3 bg-emerald-50/30">
-                  <span className="font-serif-display text-lg text-emerald-800 leading-none">{s.step}</span>
-                  <span>{s.label} <ExternalLink className="inline h-3 w-3 ml-1 opacity-60" /></span>
-                </a>
-              ))}
-            </div>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <label className="text-xs text-slate-600">Account SID
-                <Input value={twForm.account_sid} onChange={(e) => setTwForm({ ...twForm, account_sid: e.target.value.trim() })} placeholder="AC••••••••••••••••••••••••••••••••" data-testid="tw-account-sid" />
-              </label>
-              <label className="text-xs text-slate-600">API Key SID
-                <Input value={twForm.api_key_sid} onChange={(e) => setTwForm({ ...twForm, api_key_sid: e.target.value.trim() })} placeholder="SK••••••••••••••••••••••••••••••••" data-testid="tw-api-key-sid" />
-              </label>
-              <label className="text-xs text-slate-600">API Key Secret
-                <Input type="password" value={twForm.api_key_secret} onChange={(e) => setTwForm({ ...twForm, api_key_secret: e.target.value })} placeholder="••••••••••••••••••••••••" data-testid="tw-api-key-secret" />
-              </label>
-              <label className="text-xs text-slate-600">Messaging Service SID (recommended)
-                <Input value={twForm.messaging_service_sid} onChange={(e) => setTwForm({ ...twForm, messaging_service_sid: e.target.value.trim() })} placeholder="MG•••••••••••••••••••••••••••" data-testid="tw-msg-svc-sid" />
-              </label>
-            </div>
-            <div className="mt-4 flex items-center gap-2">
-              <Button onClick={saveTwilio} disabled={busy === "twilio"} data-testid="tw-connect-btn" className="rounded-full bg-emerald-700 hover:bg-emerald-800 text-white">
-                <KeyRound className="h-4 w-4 mr-2" /> {busy === "twilio" ? "Verifying…" : "Connect Twilio"}
-              </Button>
-              <span className="text-[11px] text-slate-500 inline-flex items-center gap-1"><Info className="h-3 w-3" /> Never share your Twilio Auth Token. We only accept a Restricted API Key.</span>
-            </div>
+            {tw?.connected && <Button variant="ghost" size="sm" onClick={() => setShowGuide(false)} data-testid="tw-close-guide" className="mb-3 text-xs text-slate-600">← Back to connection summary</Button>}
+            <TwilioSetupWizard isOwner={isOwner} onConnected={load} />
           </>
         ) : (
           <div className="space-y-4">
             <div className="grid sm:grid-cols-2 gap-3 text-sm">
               <div><span className="text-slate-500 text-xs">Account SID</span><div className="font-mono-clinical">{tw.account_sid_masked}</div></div>
               <div><span className="text-slate-500 text-xs">API Key SID</span><div className="font-mono-clinical">{tw.api_key_sid_masked}</div></div>
-              <div><span className="text-slate-500 text-xs">Messaging Service SID</span><div className="font-mono-clinical">{tw.messaging_service_sid || <span className="text-amber-700">Not connected · set one so SMS flows through your approved campaign</span>}</div></div>
+              <div><span className="text-slate-500 text-xs">Messaging Service SID</span><div className="font-mono-clinical">{tw.messaging_service_sid || <span className="text-amber-700">Not set. Add one so SMS goes through your approved campaign.</span>}</div></div>
               <div><span className="text-slate-500 text-xs">Last verified</span><div className="font-mono-clinical text-slate-800">{tw.verified_at?.slice(0, 19).replace("T", " ")}Z</div></div>
             </div>
-            {tw.webhooks && (
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-3 space-y-2 text-xs" data-testid="tw-webhooks">
-                <div className="text-[11px] uppercase tracking-widest text-emerald-700 font-semibold">Paste these into your Twilio number config</div>
-                {[
-                  ["Voice URL", tw.webhooks.voice_url],
-                  ["Voice status callback", tw.webhooks.voice_status_callback],
-                  ["Messaging URL", tw.webhooks.sms_url],
-                ].map(([label, url]) => (
-                  <div key={label} className="grid grid-cols-[140px_1fr_auto] gap-2 items-center">
-                    <div className="text-slate-500">{label}</div>
-                    <div className="font-mono-clinical truncate text-slate-800">{url}</div>
-                    <Button size="sm" variant="ghost" onClick={() => copy(url)} className="h-7 w-7 p-0"><Copy className="h-3 w-3" /></Button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={rotateWebhookToken} disabled={busy === "rotate"} data-testid="tw-rotate-btn" className="rounded-full border-emerald-200 text-emerald-800 hover:bg-emerald-50 text-xs">
+            <CheckResults checks={health} />
+            <div className="flex flex-wrap gap-2">
+              {isOwner && <Button variant="outline" onClick={runHealth} disabled={busy === "health"} data-testid="tw-health-btn" className="rounded-full border-emerald-200 text-emerald-800 hover:bg-emerald-50 text-xs">
+                <ShieldCheck className="h-3 w-3 mr-1.5" /> {busy === "health" ? "Checking…" : "Run health check"}
+              </Button>}
+              <Button variant="outline" onClick={() => setShowGuide(true)} data-testid="tw-open-guide" className="rounded-full border-emerald-200 text-emerald-800 hover:bg-emerald-50 text-xs">
+                <BookOpen className="h-3 w-3 mr-1.5" /> Setup guide & webhook URLs
+              </Button>
+              {isOwner && <Button variant="outline" onClick={rotateWebhookToken} disabled={busy === "rotate"} data-testid="tw-rotate-btn" className="rounded-full border-emerald-200 text-emerald-800 hover:bg-emerald-50 text-xs">
                 <RotateCcw className="h-3 w-3 mr-1.5" /> Rotate webhook token
-              </Button>
-              <Button variant="outline" onClick={disconnectTwilio} data-testid="tw-disconnect-btn" className="rounded-full border-rose-200 text-rose-700 hover:bg-rose-50 text-xs">
+              </Button>}
+              {isOwner && <Button variant="outline" onClick={disconnectTwilio} data-testid="tw-disconnect-btn" className="rounded-full border-rose-200 text-rose-700 hover:bg-rose-50 text-xs">
                 <Trash2 className="h-3 w-3 mr-1.5" /> Disconnect
-              </Button>
+              </Button>}
             </div>
           </div>
         )}

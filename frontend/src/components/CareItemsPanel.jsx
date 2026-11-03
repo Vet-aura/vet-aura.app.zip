@@ -40,11 +40,12 @@ function AddForm({ patientId, onAdded }) {
 }
 
 export function CareItemsPanel({ patientId }) {
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState(null);
   const load = useCallback(() => api.get(`/reminders/items?patient_id=${patientId}`).then((r) => setItems(r.data)).catch(() => toast.error("Couldn't load care items.")), [patientId]);
   useEffect(() => { load(); }, [load]);
 
   async function act(id, action) {
+    if (action === "delete" && !window.confirm("Delete this care item? Its reminders will stop.")) return;
     try { action === "delete" ? await api.delete(`/reminders/items/${id}`) : await api.post(`/reminders/items/${id}/complete`); load(); }
     catch { toast.error("Action failed."); }
   }
@@ -53,8 +54,9 @@ export function CareItemsPanel({ patientId }) {
     <Card className="p-6 rounded-2xl border-emerald-100 bg-white shadow-sm" data-testid="care-items-panel">
       <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold mb-1">Vaccines & preventive care</div>
       <p className="text-sm text-slate-600 mb-3">Due dates here drive automatic reminder texts (see Reminders).</p>
-      {items.length === 0 && <div className="text-sm text-slate-500 py-3" data-testid="care-items-empty">No care items yet.</div>}
-      {items.map((it) => (
+      {items === null && <div className="text-sm text-slate-400 py-3">Loading…</div>}
+      {items?.length === 0 && <div className="text-sm text-slate-500 py-3" data-testid="care-items-empty">No care items yet.</div>}
+      {(items || []).map((it) => (
         <div key={it.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 border-t border-slate-100 first:border-t-0" data-testid={`care-item-${it.id}`}>
           <div className="flex items-center gap-2 min-w-0">
             {it.kind === "vaccine" ? <Syringe className="h-4 w-4 text-emerald-700 shrink-0" /> : <HeartPulse className="h-4 w-4 text-emerald-700 shrink-0" />}

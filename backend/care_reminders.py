@@ -20,6 +20,8 @@ MERGE_FIELDS = {"first_name", "pet_name", "item", "due_date", "due_phrase", "cli
 DEFAULT_TEMPLATE = "Hi {first_name}, a reminder that {pet_name}'s {item} {due_phrase}. Reply or call us to book."
 DEFAULT_SETTINGS = {"enabled": True, "offsets": [14, 0, -7], "send_hour": 10, "template": DEFAULT_TEMPLATE}
 STALE_AFTER_DAYS = 21
+MAX_ATTEMPTS_PER_STAGE = 3
+STALE_PROCESSING = timedelta(minutes=30)
 
 
 def _now_iso() -> str:
@@ -98,8 +100,13 @@ def build_reminder_routes(db: AsyncIOMotorDatabase, auth_dep):
         patients = {p["id"]: p for p in await db.patients.find(
             {"clinic_id": cid, "id": {"$in": list({i["patient_id"] for i in items})}}, {"_id": 0}).to_list(5000)}
         owners = {o["id"]: o for o in await db.owners.find({"clinic_id": cid}, {"_id": 0}).to_list(5000)}
-        sent = {(s["item_id"], s["stage"]) for s in await db.reminder_sends.find(
-            {"clinic_id": cid, "item_id": {"$in": [i["id"] for i in items]}}, {"_id": 0, "item_id": 1, "stage": 1}).to_list(20000)}
+        sent, attempts = set(), {}
+        for s in await db.reminder_sends.find({"clinic_id": cid, "item_id": {"$in": [i["id"] for i in items]}},
+                                              {"_id": 0, "item_id": 1, "stage": 1, "dedupe_key": 1}).to_list(20000):
+            k = (s["item_id"], s["stage"])
+            attempts[k] = attempts.get(k, 0) + 1
+            if s.get("dedupe_key") or attempts[k] >= MAX_ATTEMPTS_PER_STAGE:
+                sent.add(k)
         out = []
         for it in items:
             p = patients.get(it["patient_id"])
@@ -121,6 +128,10 @@ def build_reminder_routes(db: AsyncIOMotorDatabase, auth_dep):
         today = await _clinic_today(cid)
         clinic = await db.clinics.find_one({"clinic_id": cid}, {"_id": 0, "name": 1}) or {}
         counts = {"sent": 0, "blocked": 0, "failed": 0}
+        stale = (datetime.now(timezone.utc) - STALE_PROCESSING).isoformat()
+        await db.reminder_sends.update_many({"clinic_id": cid, "status": "processing", "at": {"$lt": stale}},
+                                            {"$set": {"status": "failed", "reason": "Interrupted before sending"},
+                                             "$unset": {"dedupe_key": ""}})
         for c in await _candidates(cid, settings, today):
             ctx = {"first_name": (c["owner"].get("name") or "").split(" ")[0], "pet_name": c["patient"]["name"],
                    "item": c["item"]["name"], "due_date": date.fromisoformat(c["item"]["due_date"]).strftime("%b %-d"),
@@ -130,7 +141,8 @@ def build_reminder_routes(db: AsyncIOMotorDatabase, auth_dep):
             rec = {"id": str(uuid.uuid4()), "clinic_id": cid, "item_id": c["item"]["id"], "stage": c["stage"],
                    "patient_id": c["patient"]["id"], "patient_name": c["patient"]["name"], "owner_name": c["owner"].get("name"),
                    "item_name": c["item"]["name"], "due_date": c["item"]["due_date"], "phone_e164": c["phone_e164"],
-                   "body": body, "trigger": trigger, "status": "processing", "at": _now_iso()}
+                   "body": body, "trigger": trigger, "status": "processing", "at": _now_iso(),
+                   "dedupe_key": f"{c['item']['id']}:{c['stage']}"}
             try:
                 await db.reminder_sends.insert_one({**rec})
             except DuplicateKeyError:
@@ -145,9 +157,14 @@ def build_reminder_routes(db: AsyncIOMotorDatabase, auth_dep):
                 except Exception as e:
                     upd = {"status": "failed", "reason": str(e)[:200]}
             counts[upd["status"]] += 1
-            await db.reminder_sends.update_one({"id": rec["id"]}, {"$set": upd})
-        await db.reminder_settings.update_one({"clinic_id": cid}, {"$set": {"last_run_date": today.isoformat(),
-                                                                            "last_run_at": _now_iso()}}, upsert=True)
+            op = {"$set": upd}
+            if upd["status"] != "sent":
+                op["$unset"] = {"dedupe_key": ""}
+            await db.reminder_sends.update_one({"id": rec["id"]}, op)
+        marker = {"last_run_at": _now_iso()}
+        if trigger == "schedule":
+            marker["last_run_date"] = today.isoformat()
+        await db.reminder_settings.update_one({"clinic_id": cid}, {"$set": marker}, upsert=True)
         return counts
 
     async def run_due_clinics():
@@ -242,7 +259,7 @@ def build_reminder_routes(db: AsyncIOMotorDatabase, auth_dep):
 
     @router.get("/log")
     async def send_log(user=Depends(auth_dep)):
-        return await db.reminder_sends.find({"clinic_id": user["clinic_id"]}, {"_id": 0}).sort("at", -1).to_list(300)
+        return await db.reminder_sends.find({"clinic_id": user["clinic_id"]}, {"_id": 0, "dedupe_key": 0}).sort("at", -1).to_list(300)
 
     @router.post("/run")
     async def run_now(user=Depends(auth_dep)):
@@ -265,7 +282,13 @@ def build_reminder_routes(db: AsyncIOMotorDatabase, auth_dep):
         return {"ok": True}
 
     async def ensure_indexes_and_backfill():
-        await db.reminder_sends.create_index([("item_id", 1), ("stage", 1)], unique=True)
+        info = await db.reminder_sends.index_information()
+        if "item_id_1_stage_1" in info:
+            await db.reminder_sends.drop_index("item_id_1_stage_1")
+        await db.reminder_sends.update_many({"status": "sent", "dedupe_key": {"$exists": False}},
+                                            [{"$set": {"dedupe_key": {"$concat": ["$item_id", ":", {"$toString": "$stage"}]}}}])
+        await db.reminder_sends.create_index("dedupe_key", unique=True, sparse=True)
+        await db.reminder_sends.create_index([("clinic_id", 1), ("item_id", 1)])
         await db.care_items.create_index([("clinic_id", 1), ("patient_id", 1)])
         from seed_data import build_care_items
         seeded = set(await db.care_items.distinct("clinic_id"))

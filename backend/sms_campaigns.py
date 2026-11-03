@@ -24,6 +24,17 @@ REPLY_WINDOW = timedelta(days=7)
 BOOKING_WINDOW = timedelta(days=30)
 
 
+def _ts(v) -> Optional[datetime]:
+    """Parse ISO strings ('Z' or offset) / datetimes into aware UTC datetimes; None if unparseable."""
+    if isinstance(v, datetime):
+        return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+    try:
+        d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return None
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -278,32 +289,42 @@ def build_campaign_routes(db: AsyncIOMotorDatabase, auth_dep):
         if not camp:
             raise HTTPException(404, "Campaign not found")
         rows, sent = [], [r for r in camp["recipients"] if r["status"] == "sent"]
-        owner_ids = [r["owner_id"] for r in camp["recipients"]]
-        pets = {}
-        for p in await db.patients.find({"clinic_id": cid, "owner_id": {"$in": owner_ids}}, {"_id": 0, "id": 1, "owner_id": 1}).to_list(10000):
+        phones = [r["phone_e164"] for r in sent]
+        pets, pet_owner = {}, {}
+        for p in await db.patients.find({"clinic_id": cid, "owner_id": {"$in": [r["owner_id"] for r in sent]}},
+                                        {"_id": 0, "id": 1, "owner_id": 1}).to_list(10000):
             pets.setdefault(p["owner_id"], []).append(p["id"])
+            pet_owner[p["id"]] = p["owner_id"]
+        replies = {}
+        async for sess in db.receptionist_sessions.find({"clinic_id": cid, "from_number": {"$in": phones}},
+                                                        {"_id": 0, "from_number": 1, "transcript": 1}):
+            for t in sess.get("transcript", []):
+                if t.get("role") == "user" and _ts(t.get("at")):
+                    replies.setdefault(sess["from_number"], []).append(t)
+        optouts = {}
+        async for ev in db.consent_events.find({"clinic_id": cid, "phone_e164": {"$in": phones}, "consent_type": "marketing",
+                                                "action": "opt_out"}, {"_id": 0, "phone_e164": 1, "at": 1}):
+            if _ts(ev.get("at")):
+                optouts.setdefault(ev["phone_e164"], []).append(ev["at"])
+        bookings = {}
+        for coll, fields in (("appointments", ("created_at", "datetime")), ("visits", ("date",))):
+            async for d in db[coll].find({"clinic_id": cid, "patient_id": {"$in": list(pet_owner)}},
+                                         {"_id": 0, "patient_id": 1, **{f: 1 for f in fields}}):
+                for f in fields:
+                    if _ts(d.get(f)):
+                        bookings.setdefault(pet_owner[d["patient_id"]], []).append(d[f])
         for r in camp["recipients"]:
             row = {k: r.get(k) for k in ("owner_id", "name", "phone_e164", "status", "reason", "sent_at")}
             row.update(replied=None, opted_out_at=None, booked_at=None)
-            if r["status"] == "sent" and r.get("sent_at"):
-                start = datetime.fromisoformat(r["sent_at"])
-                s_iso, reply_end, book_end = start.isoformat(), (start + REPLY_WINDOW).isoformat(), (start + BOOKING_WINDOW).isoformat()
-                sess = await db.receptionist_sessions.find_one({"clinic_id": cid, "from_number": r["phone_e164"]}, {"_id": 0, "transcript": 1})
-                reply = next((t for t in (sess or {}).get("transcript", [])
-                              if t.get("role") == "user" and s_iso <= t.get("at", "") <= reply_end), None)
-                if reply:
-                    row["replied"] = {"at": reply["at"], "text": reply.get("text", "")[:160]}
-                opt = await db.consent_events.find_one({"clinic_id": cid, "phone_e164": r["phone_e164"], "consent_type": "marketing",
-                                                        "action": "opt_out", "at": {"$gte": s_iso}}, {"_id": 0, "at": 1})
-                row["opted_out_at"] = (opt or {}).get("at")
-                pids = pets.get(r["owner_id"], [])
-                booked = []
-                for coll, field in (("appointments", "created_at"), ("appointments", "datetime"), ("visits", "date")):
-                    d = await db[coll].find_one({"clinic_id": cid, "patient_id": {"$in": pids}, field: {"$gte": s_iso, "$lte": book_end}},
-                                                {"_id": 0, field: 1}, sort=[(field, 1)])
-                    if d:
-                        booked.append(d[field])
-                row["booked_at"] = min(booked) if booked else None
+            start = _ts(r.get("sent_at")) if r["status"] == "sent" else None
+            if start:
+                rep = sorted((t for t in replies.get(r["phone_e164"], []) if start <= _ts(t["at"]) <= start + REPLY_WINDOW),
+                             key=lambda t: _ts(t["at"]))
+                if rep:
+                    row["replied"] = {"at": rep[0]["at"], "text": rep[0].get("text", "")[:160]}
+                row["opted_out_at"] = min((a for a in optouts.get(r["phone_e164"], []) if _ts(a) >= start), key=_ts, default=None)
+                row["booked_at"] = min((b for b in bookings.get(r["owner_id"], []) if start <= _ts(b) <= start + BOOKING_WINDOW),
+                                       key=_ts, default=None)
             rows.append(row)
         n = len(sent)
         rate = lambda k: round(100 * sum(1 for x in rows if x[k]) / n, 1) if n else 0.0
