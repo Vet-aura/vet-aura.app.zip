@@ -97,7 +97,7 @@ export default function Billing() {
               )}
             </div>
           </div>
-          {clinic.stripe_customer_id && isOwner && (
+          {clinic.stripe_subscription_id && isOwner && (
             <Button onClick={portal} variant="outline" className="rounded-full border-emerald-300 text-emerald-800 hover:bg-emerald-50" data-testid="billing-portal">
               <CreditCard className="h-4 w-4 mr-2" /> Manage billing
             </Button>

@@ -1,0 +1,37 @@
+{
+  "summary": "Ran the first real end-to-end Stripe test against the new sandbox (acct_1UXmghB0mw23dZAJ, test mode). Every requested item passes. GET /api/plans returns 200 with the 4 plans at the right prices. UI flow: a new owner signs up, opens /app/billing, clicks Subscribe on Starter and lands on checkout.stripe.com (Link / managed-payments page showing '13 days free, then $249 starting Nov 16'). Paid with card 4242 4242 4242 4242, expiry 12/34, CVC 123 and a US address. Stripe sent us back to /payment/success?session_id=..., which showed \"You're all set\". /api/auth/me then had plan=starter, plan_status=trialing, a sub_ id, a cus_ id and billing_access=true. The Billing page showed the 'Manage billing' button, 'First charge on Nov 16, 2026' (billing-renewal) and 'Current plan · manage'. Clicking Manage billing opened billing.stripe.com with the subscription, the Visa ending 4242 and a $0 trial invoice. Real Stripe webhooks arrived within about 1 second and were stored in db.stripe_events (checkout.session.completed, customer.subscription.created, invoice.paid, invoice.payment_succeeded, setup_intent.*, customer.*), all returning 200. Pytest: 17 of 17 passed. They cover the double-subscription guard (400) on both checkout and checkout-bundle, bundle checkout (growth + 2 scribe seats, bundle_applied=true), an invalid plan (400), non-owner 403 on checkout, bundle and portal, an unknown session_id on /payments/status (404), a self-signed webhook with the new secret (200) and a bad signature (400), the expired account getting 402 while /plans still works, and vet1 getting 200. In the UI, the expired owner is redirected to /app/billing with the paywall banner and a 'Trial ended' badge. Subscribe opens a checkout with no trial that charges $499 today, which is correct.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/payments/status/{session_id}", "issue": "No authentication. Anyone who knows a session_id can trigger a sync and read its status. The risk is low because session ids are unguessable and the sync only reflects Stripe's own state, but tying it to the user's clinic_id would be safer."},
+      {"endpoint": "POST /api/payments/checkout (prepare_checkout)", "issue": "A Stripe Customer is created and saved on the clinic before checkout finishes. If the owner abandons checkout, the clinic still has stripe_customer_id, so 'Manage billing' appears even though there is no subscription. This applies to the expired paywalled owner too. Consider showing the portal button only when stripe_subscription_id is set, or creating the customer lazily."},
+      {"endpoint": "prepare_checkout trial carry-over", "issue": "left.days rounds down, so a brand-new 14-day in-app trial becomes 13 Stripe trial days. This is within the 13–14 days the request allows."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/payment/success", "issues": ["The text says 'Your subscription is active.' even when the subscription is trialing and the first charge is in 13 days. Suggest 'Your trial continues; first charge on <date>.'"]},
+      {"screen": "Sidebar trial card", "issues": ["After subscribing, the sidebar still shows '13 days left in trial — Upgrade any time' even though the owner has already subscribed. It should hide or change once stripe_subscription_id is set."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter13_stripe_live.py", "/app/test_reports/pytest/iter13.xml"],
+  "action_items": [
+    "(Optional) Show the 'Manage billing' button only when the clinic has stripe_subscription_id, or avoid creating the Stripe customer before checkout succeeds.",
+    "(Optional) Change the PaymentResult success text for trialing subscriptions, and hide the sidebar 'Upgrade' trial card once the clinic is subscribed.",
+    "(Optional) Scope GET /api/payments/status to the logged-in user's clinic."
+  ],
+  "critical_code_review_comments": [
+    "stripe_service.py: checkout and checkout_bundle repeat the same session-creation and transaction-insert block (about 25 lines). Move it into a shared helper.",
+    "The status endpoint swallows StripeError silently. Log it.",
+    "The webhook ordering is handled: invoice.paid arrived before customer.subscription.created, and both synced correctly through metadata.clinic_id."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter13_stripe_live.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% (Stripe checkout end to end, portal, paywall redirect, expired checkout)"},
+  "seed_data_creation": "Created the TEST owner test_iter13_e2e_24909@example.com (clinic_d6dc93b9a9d7, set onboarded=true so it could reach billing) and paid with a real Stripe test subscription (sub_1UXnqfB0mw23dZAJvQkD2gzm, cus_VYvf0iBp2R49kT). That user and clinic are now deleted from Mongo; the subscription is still in the Stripe sandbox. Pytest fixtures created and deleted their own test_iter12_i13* owners. Expired clinic clinic_ba9f0696f489: I set onboarded=true for the UI run and restored it to false. The run also created a Stripe customer on it, so I reset stripe_customer_id to null and deleted its 1 initiated payment_transaction. plan_status and trial_ends_at were not changed.",
+  "test_credentials": "Taken from /app/memory/test_credentials.md and working. expired@example.com has onboarded=false, so the UI goes to /onboarding before the paywall (already known).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Stripe checkout is a managed-payments (Link) page. To show the card fields, call locator('[data-testid=card-accordion-item-button]').dispatch_event('click'), because a normal click is intercepted. Then fill #cardNumber, #cardExpiry, #cardCvc and #billingName. Click 'Enter address manually' and fill #billingAddressLine1, #billingLocality and #billingPostalCode, then select_option #billingAdministrativeArea 'CA'. Uncheck #enableStripePass and submit with [data-testid=hosted-payment-submit-button]. Signup owners have onboarded=false, so set clinics.onboarded=true in Mongo first. The UI stores the token in localStorage 'vetaura_token'. The paid-owner tests in test_iter13_stripe_live.py read /tmp/e2e_tok and skip if that user is missing."
+}

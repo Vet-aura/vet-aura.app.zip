@@ -104,7 +104,7 @@ export default function AppShell() {
           ))}
         </nav>
 
-        {clinic.plan_status === "trialing" && (
+        {clinic.plan_status === "trialing" && !clinic.stripe_subscription_id && (
           <Link to="/app/billing" className="mt-4 block rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs hover:border-amber-300 transition-all" data-testid="trial-banner">
             <div className="flex items-center gap-1.5 font-semibold text-amber-900"><Sparkles className="h-3.5 w-3.5" /> {trialLeft} days left in trial</div>
             <div className="text-amber-800 mt-0.5">Upgrade any time — no interruption to your work.</div>

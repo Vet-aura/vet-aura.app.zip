@@ -53,7 +53,7 @@ export default function PaymentResult({ mode }) {
           <>
             <CheckCircle2 className="h-10 w-10 text-emerald-600 mx-auto mb-3" />
             <div className="font-serif-display text-2xl font-semibold text-emerald-950">You're all set.</div>
-            <div className="text-sm text-slate-600 mt-2">Your subscription is active. Back to the clinic.</div>
+            <div className="text-sm text-slate-600 mt-2">Your subscription is set up. Any remaining trial days carry over before the first charge.</div>
             <Button onClick={() => navigate("/app")} data-testid="payment-continue" className="mt-6 bg-emerald-700 hover:bg-emerald-800 text-white rounded-full w-full h-11">Open the clinic</Button>
           </>
         )}

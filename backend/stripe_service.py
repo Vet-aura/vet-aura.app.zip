@@ -1,5 +1,6 @@
 """Stripe subscription setup + checkout + webhook for Vetaura."""
 import os
+import math
 import stripe
 import logging
 from datetime import datetime, timezone, timedelta
@@ -210,7 +211,7 @@ def build_stripe_routes(db: AsyncIOMotorDatabase, auth_dep):
         trial_days = 0
         if clinic.get("trial_ends_at") and not clinic.get("stripe_subscription_id"):
             left = datetime.fromisoformat(clinic["trial_ends_at"].replace("Z", "+00:00")) - datetime.now(timezone.utc)
-            trial_days = max(0, min(14, left.days))
+            trial_days = max(0, min(14, math.ceil(left.total_seconds() / 86400)))
         return clinic, customer_id, trial_days
 
     @stripe_router.get("/plans")

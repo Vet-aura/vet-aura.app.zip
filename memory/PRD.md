@@ -149,6 +149,8 @@ See `/app/memory/test_credentials.md`. Admin cron token: `admin-cron-secret-chan
 - Billing: paywall (HTTP 402 via auth dep; trial/active/past_due 7-day grace), webhook sync for subscription.* / invoice.* / trial_will_end with event idempotency, owner-only checkout/portal, no double subscriptions, remaining trial carried over, safe redirect origins, StripeError -> 503, monthly overage cron.
 - crypto_service no longer auto-generates VETAURA_ENCRYPTION_KEY (root cause of silent key rotation).
 - Stripe managed sandbox key is EXPIRED in preview — user must claim sandbox (Preview → Manage → Payments) to take real payments.
+- 2026-11-03: old sandbox unlinked; NEW claimable sandbox provisioned (acct_1UXmghB0mw23dZAJ, US, test). Tax mode "full" (Stripe manages tax). Real test checkout verified end-to-end (iteration_13). First deploy queued.
+- AI model switched to Claude Opus 5.5 (ai_service.CLAUDE_MODEL = "claude-opus-5-5").
 
 
 ## Backlog (P0/P1/P2)
