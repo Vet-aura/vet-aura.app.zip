@@ -133,7 +133,7 @@ Vet-in-the-loop. Every AI output is a DRAFT. A clinician must review and sign be
 - Reports: `/app/test_reports/iteration_1.json` … `iteration_5.json`
 
 ## Test credentials
-See `/app/memory/test_credentials.md`. Admin cron token: `admin-cron-secret-change-me` (env `VETAURA_ADMIN_TOKEN`).
+See `/app/memory/test_credentials.md`. Admin token: set `VETAURA_ADMIN_TOKEN` to a long random value in production (never the test default).
 
 ## 2026-06 — Quiet Hours, Login Rate Limiting, Marketing Bulk Blast (iteration 10, all passing)
 - Quiet hours: clinic-set window + TZ + quiet days (Sunday default), owner-only edits; `sms_compliance.py` (`quiet_settings`, `_in_quiet_hours`, `next_send_window`); UI `components/QuietHoursCard.jsx` on /app/compliance. Marketing blocked, care unaffected.
@@ -162,3 +162,13 @@ See `/app/memory/test_credentials.md`. Admin cron token: `admin-cron-secret-chan
 - **P2** Vaccine + preventive-care reminder automation (SMS via provisioned number)
 - **P2** Owner-side account (view all discharges, refills, book appointments)
 - **P2** ISV / Managed Communications tier (Twilio subaccount API workflow for done-for-you A2P onboarding)
+
+## 2026-11 — Launch-readiness fixes (vet-aura.com)
+- Mobile: app bottom bar now Dashboard / Inbox / Scribe / Patients / More; "More" opens a sheet with every screen. Marketing site has a mobile menu (incl. Sign in). Labs table scrolls on phones.
+- Branding: page title, description, social preview tags and favicon set to Vetaura; contact emails use @vet-aura.com.
+- Dashboard greeting uses the signed-in user's first name and time of day (was hard-coded "Good morning, Dr. Reyes").
+- Marketing blasts: a clinic with a single owner can approve its own blast (with a confirm step); the two-person rule still applies when the clinic has 2+ owners.
+- Leads: demo requests, Try-it demos and new clinic signups trigger an email alert (LEADS_NOTIFY_EMAIL + PLATFORM_RESEND_API_KEY + PLATFORM_FROM_EMAIL) and are listed at GET /api/admin/leads (X-Admin-Token).
+- Security: backend refuses to start if JWT_SECRET is missing, "change-me" or shorter than 32 characters.
+- Copy: removed claims the product does not support (end-to-end encryption, Workspace SSO/MFA control, VPC/KMS single-tenant deploys, SOC 2 in progress, 6-hourly backups, 99.9% uptime, EU-resident hosting, PIMS integration in onboarding), removed a made-up testimonial, fixed the bundle-discount wording, the "Clinic plan" name and outdated roadmap lines. Privacy policy now lists Emergent as host/AI gateway.
+- Cost guard: public AI endpoints are rate-limited per visitor (receptionist chat 30 messages / 10 min per clinic; Try-it 5 demos / hour), stored in `public_rate_limits` with a TTL index (`public_rate_limit.py`).

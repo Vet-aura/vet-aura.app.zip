@@ -242,7 +242,11 @@ def build_campaign_routes(db: AsyncIOMotorDatabase, auth_dep):
         cid = user["clinic_id"]
         camp = await _pending(cid, camp_id, ("pending_approval",))
         if camp["created_by"] == user["email"]:
-            raise HTTPException(403, "A different owner must approve this blast (two-person rule).")
+            # Two-person rule when the clinic has a second owner; a solo-owner clinic may
+            # self-approve (the approval itself is the deliberate second step).
+            owner_count = await db.users.count_documents({"clinic_id": cid, "role": "owner"})
+            if owner_count > 1:
+                raise HTTPException(403, "A different owner must approve this blast (two-person rule).")
         reason = await _readiness_reason(cid)
         if reason:
             raise HTTPException(400, reason)

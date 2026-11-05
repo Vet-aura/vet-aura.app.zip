@@ -208,14 +208,14 @@ export default function Landing() {
         <div className="text-center max-w-2xl mx-auto">
           <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Safe, private, yours</div>
           <h2 className="mt-2 font-serif-display text-3xl sm:text-4xl font-semibold text-emerald-950 tracking-tight">Your clinic's data. In your clinic's control.</h2>
-          <p className="mt-3 text-slate-600">Every clinic gets an isolated tenant. Data encrypted end-to-end, siloed by clinic_id, never used to train AI, exportable at any time, deletable on request.</p>
+          <p className="mt-3 text-slate-600">Every clinic gets an isolated tenant. Data encrypted in transit and at rest, siloed by clinic_id, never used to train AI, exportable at any time, deletable on request.</p>
         </div>
 
         <div className="mt-10 grid md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { icon: Lock, t: "AES-256 at rest · TLS 1.3", d: "Encrypted everywhere, always." },
             { icon: Server, t: "Tenant isolation", d: "Query-layer scoping. Never bleeds between clinics." },
-            { icon: KeyRound, t: "Your MFA · Your policy", d: "Google Workspace SSO. Instant revocation." },
+            { icon: KeyRound, t: "Sign in with Google", d: "Use your Google account and its 2-step verification. Remove staff instantly." },
             { icon: Eye, t: "No training on your data", d: "Zero-retention model APIs. Not for sale, not for training." },
           ].map((f) => (
             <div key={f.t} className="p-5 rounded-2xl border border-emerald-100 bg-white shadow-sm" data-testid={`landing-security-${f.t.split(" ")[0].toLowerCase()}`}>
@@ -234,7 +234,7 @@ export default function Landing() {
       <section className="max-w-7xl mx-auto px-6 pb-24">
         <div className="rounded-3xl bg-emerald-900 text-white p-10 sm:p-16 text-center">
           <div className="text-[10px] uppercase tracking-widest text-emerald-200/80 font-semibold">Turn-key. Vet-in-the-loop. Ready today.</div>
-          <h2 className="mt-3 font-serif-display text-3xl sm:text-4xl lg:text-5xl font-semibold leading-tight">The AI copilot every veterinary practice will run in 2026.</h2>
+          <h2 className="mt-3 font-serif-display text-3xl sm:text-4xl lg:text-5xl font-semibold leading-tight">The AI copilot built for the way your practice actually works.</h2>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link to="/signup"><Button className="bg-white text-emerald-900 hover:bg-emerald-50 rounded-full h-11 px-6" data-testid="landing-final-signup">Start your free trial <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>
             <Link to="/demo"><Button variant="outline" className="rounded-full h-11 px-6 border-white/30 text-white bg-white/0 hover:bg-white/10" data-testid="landing-final-demo">Book a live demo</Button></Link>

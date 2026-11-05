@@ -11,21 +11,21 @@ const STATS = [
     big: "~2 hr / day",
     label: "documentation time reclaimed per DVM",
     body: "Independent studies of ambient AI scribes show a 50–80% reduction in charting time. Vetaura targets ~2 hours per clinician per day.",
-    cite: "Vendor benchmark · Nabla, DeepScribe, Abridge 2024–2025",
+    cite: "Published studies of ambient AI scribes (human medicine)",
   },
   {
     icon: DollarSign,
     big: "$5,600 / mo",
     label: "value recovered per DVM (est.)",
     body: "At an average $85/hr clinical value × 2 hr/day × 22 working days, one clinician recovers ~$5,610 per month in reclaimed hands-on time.",
-    cite: "AVMA compensation reports · Bureau of Labor Statistics",
+    cite: "Illustrative estimate · adjust in the calculator",
   },
   {
     icon: TrendingUp,
     big: "+15–25%",
     label: "recheck & follow-through",
     body: "Clinic-branded owner portals with one-tap 'Request recheck' consistently lift follow-up compliance and reduce no-shows.",
-    cite: "Vet Marketing Institute benchmarks",
+    cite: "Industry estimate",
   },
   {
     icon: Calendar,
@@ -63,7 +63,7 @@ export default function ROI() {
             Time back. Money back. Better care.
           </h1>
           <p className="mt-5 text-base sm:text-lg text-slate-600 leading-relaxed">
-            Vetaura isn't a nice-to-have. Here's what a Clinic-plan practice recovers in the first month.
+            Vetaura isn't a nice-to-have. Here's what a Growth-plan practice recovers in the first month.
           </p>
         </div>
       </section>

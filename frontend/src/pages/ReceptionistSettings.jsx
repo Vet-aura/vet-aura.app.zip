@@ -88,7 +88,7 @@ export default function ReceptionistSettings() {
             <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-full">Preview <ExternalLink className="ml-2 h-4 w-4" /></Button>
           </a>
         </div>
-        <div className="text-xs text-slate-500 mt-2">Embed this link in your website chat button, Google Business profile, or SMS auto-reply. Phone / SMS integrations via Twilio are on the roadmap.</div>
+        <div className="text-xs text-slate-500 mt-2">Embed this link in your website chat button, Google Business profile, or SMS auto-reply. Phone and SMS answering is set up under Phone & SMS.</div>
       </Card>
 
       {/* Basics */}

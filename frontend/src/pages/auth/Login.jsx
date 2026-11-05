@@ -52,9 +52,9 @@ export default function Login() {
         </div>
         <div>
           <h1 className="font-serif-display text-4xl leading-tight font-semibold text-white">
-            "Vetaura gives me my day back with the animals — I no longer take notes home."
+            Spend your day with the animals, not the notes.
           </h1>
-          <div className="mt-6 text-emerald-200/80 text-sm">Dr. Amaya Reyes · Meadow Ridge Veterinary</div>
+          <div className="mt-6 text-emerald-200/80 text-sm">Ambient scribe · client inbox · follow-ups · discharges</div>
         </div>
         <div className="text-xs text-emerald-200/60">© Vetaura · Vet-in-the-loop by design</div>
       </div>

@@ -1,3 +1,4 @@
+import { useAuth } from "@/context/AuthProvider";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
@@ -7,6 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Mic, ArrowRight, AlertTriangle, PawPrint, Clock, MessagesSquare, ListTodo, TrendingUp } from "lucide-react";
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const hour = new Date().getHours();
+  const partOfDay = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const firstName = (user?.name || "").trim().split(/\s+/)[0];
+  const greeting = firstName ? `${partOfDay}, ${firstName}` : partOfDay;
   const [stats, setStats] = useState(null);
   const [appts, setAppts] = useState([]);
   const [patients, setPatients] = useState([]);
@@ -28,7 +34,7 @@ export default function Dashboard() {
       {/* Hero header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Good morning, Dr. Reyes</div>
+          <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold">{greeting}</div>
           <h1 className="mt-1 font-serif-display text-3xl sm:text-4xl lg:text-5xl font-semibold text-emerald-950 tracking-tight">
             Your clinic, at a glance.
           </h1>

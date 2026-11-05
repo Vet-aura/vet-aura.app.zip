@@ -1,4 +1,4 @@
-"""AI service: Claude Sonnet 5 for SOAP/differentials/discharge + Whisper for transcription."""
+"""AI service: Claude Opus 5.5 for SOAP/differentials/discharge + Whisper for transcription."""
 import os
 import json
 import re

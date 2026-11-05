@@ -4,6 +4,8 @@ Fetches a clinic's public website, extracts hours/phone/services/address heurist
 spins up an ephemeral demo clinic (expires in 24h), and returns a receptionist widget URL.
 """
 from __future__ import annotations
+from lead_notify import notify_lead
+from public_rate_limit import enforce as rate_limit
 import re
 import uuid
 import socket
@@ -11,8 +13,7 @@ import ipaddress
 import logging
 from urllib.parse import urlparse
 import httpx
-from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, HttpUrl
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -215,7 +216,9 @@ def build_tryit_routes(db: AsyncIOMotorDatabase):
     router = APIRouter(prefix="/api/marketing")
 
     @router.post("/try-it")
-    async def try_it(req: TryItReq):
+    async def try_it(req: TryItReq, request: Request):
+        # Each demo scrapes a site and spends AI credits: 5 per hour per visitor.
+        await rate_limit(db, request, "try-it", limit=5, window_minutes=60)
         profile = await scrape_clinic(str(req.url))
         demo_id = "demo_" + uuid.uuid4().hex[:10]
         expires_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
@@ -265,6 +268,7 @@ def build_tryit_routes(db: AsyncIOMotorDatabase):
             "profile": profile,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
+        await notify_lead("Try-it demo", {"email": req.email, "clinic": profile.get("clinic_name"), "website": profile.get("source_url")})
         return {
             "demo_clinic_id": demo_id,
             "profile": profile,

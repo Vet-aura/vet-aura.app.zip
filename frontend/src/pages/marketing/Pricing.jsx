@@ -110,7 +110,7 @@ export default function Pricing() {
               <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold">Multi-location</div>
             </div>
             <div className="font-serif-display text-2xl font-semibold text-emerald-950">Custom · ~$499–$599 / location / mo</div>
-            <div className="text-sm text-slate-600 mt-2">For veterinary groups and hospital chains. Central reporting, SSO, dedicated onboarding, custom integrations, volume discount.</div>
+            <div className="text-sm text-slate-600 mt-2">For veterinary groups and hospital chains. Dedicated onboarding, volume discount and custom work scoped with you.</div>
             <Link to="/demo"><Button variant="outline" className="mt-4 rounded-full border-emerald-300 text-emerald-800 hover:bg-emerald-50" data-testid="plan-multilocation-cta">Talk to sales <ArrowRight className="ml-2 h-3 w-3" /></Button></Link>
           </Card>
 
@@ -135,7 +135,7 @@ export default function Pricing() {
               <div className="text-xs uppercase tracking-widest text-emerald-700 font-semibold">One-time onboarding</div>
             </div>
             <div className="font-serif-display text-2xl font-semibold text-emerald-950">$500 – $1,500</div>
-            <div className="text-sm text-slate-600 mt-2">Workflow setup, clinic policy configuration, message templates, phone scripts, emergency-routing rules, staff training and PIMS integration. Multi-location implementations: $2,500 – $10,000+.</div>
+            <div className="text-sm text-slate-600 mt-2">Workflow setup, clinic policy configuration, message templates, phone scripts, emergency-routing rules, and staff training. Multi-location implementations: $2,500 – $10,000+.</div>
           </Card>
         </div>
 

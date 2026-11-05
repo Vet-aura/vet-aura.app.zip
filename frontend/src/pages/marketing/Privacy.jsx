@@ -12,7 +12,7 @@ const CONTENT = [
   },
   {
     h: "3. Sub-processors",
-    p: "We use trusted sub-processors under strict data-processing agreements: Anthropic (Claude Opus 5.5 for clinical drafting), OpenAI (Whisper for audio transcription), Stripe (subscription billing), and our cloud infrastructure provider. A current list is available on request. All are contractually prohibited from using your data for training or resale.",
+    p: "We use these sub-processors to run the service: Emergent (application hosting, database and AI gateway), Anthropic (Claude Opus 5.5 for clinical drafting), OpenAI (Whisper for audio transcription) and Stripe (subscription billing). Texting and email go through the Twilio and email accounts your clinic connects and controls. A current list is available on request. We do not sell your data or permit it to be used to train AI models.",
   },
   {
     h: "4. AI model training",
@@ -24,7 +24,7 @@ const CONTENT = [
   },
   {
     h: "6. Data location & transfers",
-    p: "By default, data is stored in the US. EU/UK clinics may request a EU-resident deployment. For international transfers we rely on Standard Contractual Clauses (SCCs). A Data Processing Addendum (DPA) is available on request.",
+    p: "Data is stored in the US. For international transfers we rely on Standard Contractual Clauses (SCCs). A Data Processing Addendum (DPA) is available on request.",
   },
   {
     h: "7. Retention & deletion",
@@ -32,7 +32,7 @@ const CONTENT = [
   },
   {
     h: "8. Your rights",
-    p: "You have the right to access, correct, export or delete your data at any time. EU/UK residents additionally have GDPR/UK-GDPR rights (data portability, objection to processing, complaint to a supervisory authority). California residents have CCPA/CPRA rights. Contact privacy@vetaura.ai to exercise any right.",
+    p: "You have the right to access, correct, export or delete your data at any time. EU/UK residents additionally have GDPR/UK-GDPR rights (data portability, objection to processing, complaint to a supervisory authority). California residents have CCPA/CPRA rights. Contact vetaura.app@gmail.com to exercise any right.",
   },
   {
     h: "9. Cookies",
@@ -44,7 +44,7 @@ const CONTENT = [
   },
   {
     h: "11. Contact",
-    p: "Privacy inquiries: privacy@vetaura.ai · Security incidents: security@vetaura.ai · Data requests: honored within 30 days (45 for CCPA).",
+    p: "Privacy inquiries: vetaura.app@gmail.com · Security incidents: vetaura.app@gmail.com · Data requests: honored within 30 days (45 for CCPA).",
   },
 ];
 
@@ -66,7 +66,7 @@ export default function Privacy() {
         </div>
 
         <div className="mt-12 text-sm text-slate-600">
-          Questions? <a href="mailto:privacy@vetaura.ai" className="text-emerald-800 hover:text-emerald-900 font-semibold">privacy@vetaura.ai</a> · See also our <Link to="/legal/terms" className="text-emerald-800 hover:text-emerald-900 font-semibold">Terms of Service</Link> and <Link to="/security" className="text-emerald-800 hover:text-emerald-900 font-semibold">Security page</Link>.
+          Questions? <a href="mailto:vetaura.app@gmail.com" className="text-emerald-800 hover:text-emerald-900 font-semibold">vetaura.app@gmail.com</a> · See also our <Link to="/legal/terms" className="text-emerald-800 hover:text-emerald-900 font-semibold">Terms of Service</Link> and <Link to="/security" className="text-emerald-800 hover:text-emerald-900 font-semibold">Security page</Link>.
         </div>
       </section>
     </MarketingShell>

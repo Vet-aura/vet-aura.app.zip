@@ -51,7 +51,7 @@ async def consume_invite(db: AsyncIOMotorDatabase, token: str, user_id: str, ema
         await db.invitations.update_one({"_id": inv["_id"]}, {"$set": {"status": "expired"}})
         return None
     # attach to clinic
-    await db.users.update_one({"id": user_id}, {"$set": {"clinic_id": inv["clinic_id"], "role": inv["role"]}})
+    await db.users.update_one({"user_id": user_id}, {"$set": {"clinic_id": inv["clinic_id"], "role": inv["role"]}})
     await db.invitations.update_one({"_id": inv["_id"]},
                                     {"$set": {"status": "accepted",
                                               "accepted_at": datetime.now(timezone.utc).isoformat(),

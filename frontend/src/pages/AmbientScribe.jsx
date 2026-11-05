@@ -162,7 +162,6 @@ export default function AmbientScribe() {
         objective: soap.objective,
         assessment: soap.assessment,
         plan: soap.plan,
-        signed_by: "Dr. Reyes",
       });
       toast.success("Note signed and filed to patient record.");
     } catch {

@@ -8,17 +8,17 @@ const PILLARS = [
   {
     icon: Lock,
     title: "Data encryption, everywhere",
-    body: "AES-256 at rest for every note, transcript and lab. TLS 1.3 in transit. Encrypted database backups every 6 hours, retained for 30 days.",
+    body: "AES-256 at rest for every note, transcript and lab. TLS 1.3 in transit. Database backups are encrypted.",
   },
   {
     icon: Server,
     title: "Tenant isolation — your clinic, your silo",
-    body: "Every record is scoped by clinic_id at the query layer, not just the UI. Two clinics on the same infrastructure can never see each other's data. Multi-site plan available with a dedicated tenant.",
+    body: "Every record is scoped by clinic_id at the query layer, not just the UI. Two clinics on the same infrastructure can never see each other's data.",
   },
   {
     icon: KeyRound,
     title: "You control access",
-    body: "Enforce your own MFA policy via Google Workspace SSO. Session tokens expire in 7 days. Instant staff revocation. Optional IP allow-list on Multi-site plan.",
+    body: "Staff can sign in with Google, so your Google 2-step verification applies. Session tokens expire in 7 days. Instant staff revocation. ",
   },
   {
     icon: ClipboardCheck,
@@ -80,10 +80,9 @@ const CONTROLS = [
   "Role-based access (owner / vet / tech / front-desk)",
   "Immutable audit log · exportable",
   "Session-token expiry with instant revocation",
-  "Automated encrypted backups every 6 hours (30-day retention)",
-  "Vulnerability scanning · dependency alerting · patching SLA",
+  "Encrypted database backups",
+  "Dependency updates and security patching",
   "Breach notification within 72 hours of confirmed incident",
-  "Optional dedicated tenant + VPC deploy (Multi-site plan)",
 ];
 
 export default function Security() {
@@ -99,7 +98,7 @@ export default function Security() {
             Your clinic's data. In your clinic's control.
           </h1>
           <p className="mt-5 text-base sm:text-lg text-slate-600 leading-relaxed">
-            Vetaura is built for veterinarians who take patient records seriously. Encrypted end-to-end, siloed by clinic, audit-logged and exportable — with a vet-in-the-loop on every AI draft.
+            Vetaura is built for veterinarians who take patient records seriously. Encrypted in transit and at rest, siloed by clinic, audit-logged and exportable — with a vet-in-the-loop on every AI draft.
           </p>
         </div>
       </section>
@@ -123,12 +122,12 @@ export default function Security() {
       <section className="bg-emerald-900 text-emerald-50">
         <div className="max-w-6xl mx-auto px-6 py-16 grid lg:grid-cols-2 gap-10 items-start">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-emerald-200/80 font-semibold">Your infrastructure · your rules</div>
+            <div className="text-[10px] uppercase tracking-widest text-emerald-200/80 font-semibold">Your access · your rules</div>
             <h2 className="mt-2 font-serif-display text-3xl sm:text-4xl font-semibold text-white leading-tight">
-              Runs inside your world — behind your firewall, your MFA, your policies.
+              Your team, your access rules — you decide who sees what.
             </h2>
             <p className="mt-4 text-emerald-100/85 leading-relaxed">
-              Every Vetaura clinic gets its own isolated tenant. Multi-site plans can request a <span className="text-white font-semibold">dedicated single-tenant deploy</span> inside a VPC — your DNS, your IAM, your KMS keys, your backup retention. You bring the security perimeter; we plug into it.
+              Every Vetaura clinic is its own isolated workspace. Owners invite staff with a role (vet, tech or front desk), remove access instantly, and every AI draft and signature is logged.
             </p>
             <ul className="mt-6 space-y-2">
               {CONTROLS.map((c, i) => (
@@ -186,7 +185,7 @@ export default function Security() {
           <span className="text-slate-300">·</span>
           <Link to="/legal/privacy" className="text-emerald-800 hover:text-emerald-900 font-semibold flex items-center gap-1" data-testid="link-privacy"><Lock className="h-4 w-4" /> Privacy Policy</Link>
           <span className="text-slate-300">·</span>
-          <a href="mailto:security@vetaura.ai" className="text-emerald-800 hover:text-emerald-900 font-semibold flex items-center gap-1" data-testid="link-dpa"><Globe2 className="h-4 w-4" /> Request DPA / SCCs</a>
+          <a href="mailto:vetaura.app@gmail.com" className="text-emerald-800 hover:text-emerald-900 font-semibold flex items-center gap-1" data-testid="link-dpa"><Globe2 className="h-4 w-4" /> Request DPA / SCCs</a>
         </div>
       </section>
 
@@ -195,7 +194,7 @@ export default function Security() {
         <Card className="p-8 rounded-2xl bg-white border-emerald-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
           <div>
             <div className="font-serif-display text-2xl font-semibold text-emerald-950">Have a specific security question?</div>
-            <div className="text-sm text-slate-600 mt-1">We answer within one business day and can share a full SOC 2 readiness statement, DPA and SCCs on request.</div>
+            <div className="text-sm text-slate-600 mt-1">We answer within one business day and can share our Data Processing Addendum (DPA) on request.</div>
           </div>
           <div className="flex gap-2">
             <Link to="/demo"><Button className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-full h-11 px-5" data-testid="security-book-demo">Talk to us <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>

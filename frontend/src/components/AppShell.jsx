@@ -1,7 +1,9 @@
+import { useState, useEffect } from "react";
 import { NavLink, Outlet, useNavigate, Link, Navigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, Mic, PawPrint, Inbox, CalendarDays, ClipboardList, Stethoscope, MessagesSquare, CreditCard, Settings as SettingsIcon, Activity, LogOut, Sparkles, ListTodo, TrendingUp, PhoneCall, FileText, ShieldCheck, Users, Plug, Megaphone, BellRing } from "lucide-react";
+import { LayoutDashboard, Mic, PawPrint, Inbox, CalendarDays, ClipboardList, Stethoscope, MessagesSquare, CreditCard, Settings as SettingsIcon, Activity, LogOut, Sparkles, ListTodo, TrendingUp, PhoneCall, FileText, ShieldCheck, Users, Plug, Megaphone, BellRing, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthProvider";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const PRIMARY_NAV = [
@@ -16,6 +18,9 @@ const PRIMARY_NAV = [
   { to: "/app/discharge", icon: MessagesSquare, label: "Discharge", tid: "nav-discharge" },
   { to: "/app/handoff", icon: Stethoscope, label: "Shift Handoff", tid: "nav-handoff" },
 ];
+
+// Bottom-bar tabs on phones; everything else lives under "More".
+const MOBILE_TABS = ["/app", "/app/inbox", "/app/scribe", "/app/patients"];
 
 const SECONDARY_NAV = [
   { to: "/app/receptionist", icon: PhoneCall, label: "AI Receptionist", tid: "nav-receptionist" },
@@ -36,6 +41,8 @@ export default function AppShell() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const clinic = user?.clinic || {};
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => { setMoreOpen(false); }, [location.pathname]);
 
   const trialLeft = clinic.trial_ends_at
     ? Math.max(0, Math.ceil((new Date(clinic.trial_ends_at) - new Date()) / 86400000))
@@ -149,22 +156,61 @@ export default function AppShell() {
         </header>
 
         {/* Mobile bottom nav */}
-        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-emerald-100 grid grid-cols-4 py-2 px-2">
-          {PRIMARY_NAV.slice(0, 4).map((n) => (
+        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-emerald-100 grid grid-cols-5 py-2 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]" aria-label="Main">
+          {PRIMARY_NAV.filter((n) => MOBILE_TABS.includes(n.to)).map((n) => (
             <NavLink
               key={n.to}
               to={n.to}
-              end={n.end}
+              end={n.end || n.to === "/app/scribe"}
               data-testid={`m-${n.tid}`}
               className={({ isActive }) =>
-                cn("flex flex-col items-center justify-center gap-1 py-1 text-[10px] font-medium rounded-lg", isActive ? "text-emerald-700" : "text-slate-500")
+                cn("flex flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium rounded-lg", isActive ? "text-emerald-700" : "text-slate-500")
               }
             >
               <n.icon className="h-5 w-5" />
-              {n.label.split(" ")[0]}
+              {n.to === "/app/inbox" ? "Inbox" : n.to === "/app/scribe" ? "Scribe" : n.label}
             </NavLink>
           ))}
+          <button
+            type="button"
+            onClick={() => setMoreOpen(true)}
+            data-testid="m-nav-more"
+            className="flex flex-col items-center justify-center gap-1 py-1 text-[11px] font-medium rounded-lg text-slate-500"
+          >
+            <Menu className="h-5 w-5" />
+            More
+          </button>
         </nav>
+
+        <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+          <SheetContent side="bottom" className="lg:hidden max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white" data-testid="m-nav-sheet">
+            <SheetHeader>
+              <SheetTitle className="font-serif-display text-emerald-950">{clinic.name || "Vetaura"}</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {[...PRIMARY_NAV, ...SECONDARY_NAV].map((n) => (
+                <NavLink
+                  key={n.to}
+                  to={n.to}
+                  end={n.end || n.to === "/app/scribe"}
+                  data-testid={`m-more-${n.tid}`}
+                  className={({ isActive }) =>
+                    cn("flex items-center gap-2 px-3 py-3 rounded-xl text-sm font-medium border",
+                      isActive ? "bg-emerald-700 text-white border-emerald-700" : "border-emerald-100 text-slate-700 hover:bg-emerald-50")
+                  }
+                >
+                  <n.icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{n.label}</span>
+                </NavLink>
+              ))}
+            </div>
+            {clinic.plan_status === "trialing" && !clinic.stripe_subscription_id && (
+              <Link to="/app/billing" className="mt-4 block rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 font-semibold">
+                {trialLeft} days left in trial · Choose a plan
+              </Link>
+            )}
+          </SheetContent>
+        </Sheet>
 
         <main className="flex-1 overflow-y-auto pb-20 lg:pb-0">
           {user?.clinic?.billing_access === false && !["/app/billing", "/app/settings"].includes(location.pathname)

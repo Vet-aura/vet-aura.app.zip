@@ -22,7 +22,7 @@ export default function Demo() {
       setDone(true);
       toast.success("Thanks — we'll be in touch within one business day.");
     } catch {
-      toast.error("Something went wrong. Please email hello@vetaura.ai.");
+      toast.error("Something went wrong. Please email vetaura.app@gmail.com.");
     } finally {
       setBusy(false);
     }

@@ -123,7 +123,7 @@ export default function Onboarding() {
                 { title: "Record an appointment", body: "Or load a built-in sample transcript. Claude Opus 5.5 will draft a full SOAP.", tid: "onboard-tip-scribe" },
                 { title: "Draft an owner discharge", body: "In Spanish, French, Mandarin — with a shareable owner-portal link.", tid: "onboard-tip-discharge" },
                 { title: "Triage a client message", body: "Empathetic drafts with urgency tags; staff signs off.", tid: "onboard-tip-inbox" },
-                { title: "Generate a shift handoff", body: "One click summarises every hospitalized case.", tid: "onboard-tip-handoff" },
+                { title: "Generate a shift handoff", body: "One click summarizes every hospitalized case.", tid: "onboard-tip-handoff" },
               ].map((t) => (
                 <div key={t.title} className="p-4 rounded-xl border border-emerald-100 bg-emerald-50/40" data-testid={t.tid}>
                   <div className="font-semibold text-emerald-900 text-sm">{t.title}</div>

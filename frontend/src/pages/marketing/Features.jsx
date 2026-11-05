@@ -45,7 +45,7 @@ const SUPPORTING = [
   { icon: Mic, title: "Ambient SOAP scribe", body: "Record the exam — Whisper transcribes, Claude drafts a signed-ready SOAP note in seconds." },
   { icon: ClipboardList, title: "Differential checklists", body: "Signalment + history in, tiered differentials + workup + questions + red flags out." },
   { icon: Languages, title: "Multilingual owner discharges", body: "Plain-language, mobile-friendly discharge portal in 6 languages with a one-tap recheck button." },
-  { icon: Stethoscope, title: "Shift handoff", body: "One click summarises every active patient into hospitalized cases, pending labs and next actions." },
+  { icon: Stethoscope, title: "Shift handoff", body: "One click summarizes every active patient into hospitalized cases, pending labs and next actions." },
   { icon: LineChart, title: "Longitudinal trends", body: "Weight, renal panel, glucose, seizure frequency charted across visits with reference-range highlights." },
   { icon: PawPrint, title: "Patient records", body: "Every owner, pet, visit, lab and appointment — searchable and scoped by clinic." },
   { icon: FileCheck2, title: "Audit log & CSV exports", body: "Every AI draft, every signature, every share logged. Export patients and notes as CSV any time." },

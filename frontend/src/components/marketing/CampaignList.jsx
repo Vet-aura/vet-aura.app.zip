@@ -17,9 +17,9 @@ const STATUS = {
   cancelled: ["Cancelled", "bg-slate-100 text-slate-600 border-slate-200"],
 };
 
-function Actions({ c, me, isOwner, act, openResults }) {
+function Actions({ c, me, isOwner, soloOwner, act, openResults }) {
   const pending = c.status === "pending_approval";
-  const canApprove = pending && isOwner && c.created_by !== me;
+  const canApprove = pending && isOwner && (c.created_by !== me || soloOwner);
   return (
     <div className="flex flex-wrap gap-2">
       {canApprove && <Button size="sm" onClick={() => act(c.id, "approve")} data-testid={`campaign-approve-${c.id}`} className="h-8 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs"><CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve & send</Button>}
@@ -27,16 +27,17 @@ function Actions({ c, me, isOwner, act, openResults }) {
       {(pending || c.status === "scheduled") && (c.created_by === me || isOwner) && <Button size="sm" variant="ghost" onClick={() => act(c.id, "cancel")} data-testid={`campaign-cancel-${c.id}`} className="h-8 text-xs text-slate-500">Cancel</Button>}
       {pending && isOwner && <Button size="sm" variant="outline" onClick={() => act(c.id, "test")} data-testid={`campaign-test-${c.id}`} className="h-8 rounded-full border-emerald-300 text-emerald-800 text-xs"><Smartphone className="h-3.5 w-3.5 mr-1" /> Send test to my phone</Button>}
       {["completed", "sending"].includes(c.status) && <Button size="sm" variant="outline" onClick={() => openResults(c.id)} data-testid={`campaign-results-${c.id}`} className="h-8 rounded-full border-emerald-300 text-emerald-800 text-xs"><BarChart3 className="h-3.5 w-3.5 mr-1" /> Results</Button>}
-      {pending && c.created_by === me && <span className="text-xs text-slate-500 self-center" data-testid={`campaign-needs-other-${c.id}`}>Another owner must approve</span>}
+      {pending && c.created_by === me && !soloOwner && <span className="text-xs text-slate-500 self-center" data-testid={`campaign-needs-other-${c.id}`}>Another owner must approve</span>}
     </div>
   );
 }
 
-export function CampaignList({ campaigns, me, isOwner, onChange }) {
+export function CampaignList({ campaigns, me, isOwner, soloOwner = false, onChange }) {
   const [showAll, setShowAll] = useState(false);
   const [resultsId, setResultsId] = useState(null);
   const shown = showAll ? campaigns : campaigns.slice(0, 10);
   async function act(id, action) {
+    if (action === "approve" && !window.confirm("Send this blast to every client with marketing consent?")) return;
     const body = action === "reject" ? { reason: window.prompt("Reason for rejecting (optional)") || "" } : undefined;
     try {
       const { data } = await api.post(`/sms/marketing/campaigns/${id}/${action}`, body);
@@ -63,7 +64,7 @@ export function CampaignList({ campaigns, me, isOwner, onChange }) {
             {c.results && <div className="text-xs text-slate-600" data-testid={`campaign-results-summary-${c.id}`}>{c.results.sent} sent · {c.results.blocked} blocked · {c.results.failed} failed</div>}
             {c.reject_reason && <div className="text-xs text-rose-700">Reason: {c.reject_reason}</div>}
             {(c.tests || []).length > 0 && <div className="text-xs text-slate-500" data-testid={`campaign-tests-${c.id}`}>{c.tests.length} test attempt{c.tests.length > 1 ? "s" : ""} · last {c.tests[c.tests.length - 1].status === "sent" ? "delivered to Twilio" : "failed"} ({c.tests[c.tests.length - 1].to})</div>}
-            <Actions c={c} me={me} isOwner={isOwner} act={act} openResults={setResultsId} />
+            <Actions c={c} me={me} isOwner={isOwner} soloOwner={soloOwner} act={act} openResults={setResultsId} />
           </div>
         );
       })}

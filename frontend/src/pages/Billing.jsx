@@ -120,7 +120,7 @@ export default function Billing() {
               <div className={`font-serif-display text-2xl font-semibold mt-1 ${highlighted ? "text-white" : "text-emerald-950"}`}>{p.product.replace("Vetaura ", "")}</div>
               <div className="flex items-baseline gap-1 mt-3">
                 <span className={`font-serif-display text-4xl font-semibold ${highlighted ? "text-white" : "text-emerald-950"}`}>${p.amount / 100}</span>
-                <span className={`text-sm ${highlighted ? "text-emerald-200/80" : "text-slate-500"}`}>/ loc / mo</span>
+                <span className={`text-sm ${highlighted ? "text-emerald-200/80" : "text-slate-500"}`}>/ location / mo</span>
               </div>
               {scribeBundled && (
                 <div className={`text-xs mt-1 ${highlighted ? "text-amber-200" : "text-amber-700"}`}>
@@ -160,7 +160,7 @@ export default function Billing() {
               />
               <span>
                 <span className="font-semibold text-emerald-950">Bundle Ambient Scribe · 20% off</span>
-                <span className="block text-xs text-slate-600 mt-0.5">Adds the Scribe add-on to your checkout. First-year bundle discount is auto-applied for as long as you keep both.</span>
+                <span className="block text-xs text-slate-600 mt-0.5">Adds the Scribe add-on to your checkout. The bundle discount is applied automatically for as long as you keep both.</span>
               </span>
             </label>
             {attachScribe && (

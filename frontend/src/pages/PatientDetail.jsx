@@ -138,7 +138,8 @@ export default function PatientDetail() {
 
         <TabsContent value="labs" className="mt-4">
           <Card className="p-6 rounded-2xl border-emerald-100 bg-white shadow-sm">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto -mx-2 px-2">
+            <table className="w-full min-w-[520px] text-sm">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-widest text-slate-500 font-semibold border-b border-emerald-50">
                   <th className="py-2">Date</th>
@@ -161,6 +162,7 @@ export default function PatientDetail() {
                 ))}
               </tbody>
             </table>
+            </div>
             {(p.labs || []).length === 0 && <div className="py-6 text-sm text-slate-500 text-center">No lab results yet.</div>}
           </Card>
         </TabsContent>

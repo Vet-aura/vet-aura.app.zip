@@ -8,8 +8,12 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from lead_notify import notify_lead
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "change-me")
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
+if not JWT_SECRET or JWT_SECRET == "change-me" or len(JWT_SECRET) < 32:
+    # Fail fast: a missing or weak secret would let anyone forge login tokens.
+    raise RuntimeError("JWT_SECRET must be set to a random value of at least 32 characters.")
 JWT_ALG = "HS256"
 JWT_EXPIRES_DAYS = 7
 
@@ -102,6 +106,7 @@ async def _create_clinic(db: AsyncIOMotorDatabase, name: str, owner_email: str) 
     await db.clinics.insert_one(clinic)
     clinic.pop("_id", None)
     await _seed_clinic(db, clinic["clinic_id"])
+    await notify_lead("new clinic signup", {"clinic": name, "email": owner_email})
     return clinic
 
 

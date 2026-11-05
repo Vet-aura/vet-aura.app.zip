@@ -24,7 +24,7 @@ const CONTENT = [
   },
   {
     h: "6. Availability",
-    p: "We target 99.9% monthly uptime. Scheduled maintenance is announced in advance. We are not liable for downtime caused by upstream providers (Anthropic, OpenAI, Stripe, cloud infrastructure).",
+    p: "We aim for high availability and announce scheduled maintenance in advance when we can. We are not liable for downtime caused by upstream providers (Anthropic, OpenAI, Stripe, cloud infrastructure).",
   },
   {
     h: "7. Termination",
@@ -62,7 +62,7 @@ export default function Terms() {
         </div>
 
         <div className="mt-12 text-sm text-slate-600">
-          Questions? <a href="mailto:legal@vetaura.ai" className="text-emerald-800 hover:text-emerald-900 font-semibold">legal@vetaura.ai</a> · See also our <Link to="/legal/privacy" className="text-emerald-800 hover:text-emerald-900 font-semibold">Privacy Policy</Link>.
+          Questions? <a href="mailto:vetaura.app@gmail.com" className="text-emerald-800 hover:text-emerald-900 font-semibold">vetaura.app@gmail.com</a> · See also our <Link to="/legal/privacy" className="text-emerald-800 hover:text-emerald-900 font-semibold">Privacy Policy</Link>.
         </div>
       </section>
     </MarketingShell>

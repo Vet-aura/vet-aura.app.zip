@@ -34,6 +34,8 @@ from login_security import LoginGuard, build_security_routes
 from sms_campaigns import build_campaign_routes
 from care_reminders import build_reminder_routes
 from phone_verify import build_phone_verify_routes
+from lead_notify import notify_lead, build_admin_lead_routes
+from public_rate_limit import enforce as rate_limit
 from twilio_setup import build_twilio_setup_routes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -274,6 +276,7 @@ async def marketing_demo(req: DemoReq):
         **req.model_dump(),
         "at": datetime.now(timezone.utc).isoformat(),
     })
+    await notify_lead("demo request", {"name": req.name, "email": req.email, "clinic": req.clinic, "message": req.message})
     return {"ok": True}
 
 
@@ -882,8 +885,10 @@ async def receptionist_public_config(clinic_id: str):
 
 
 @api.post("/receptionist/chat")
-async def receptionist_chat(req: ReceptionistChatReq):
+async def receptionist_chat(req: ReceptionistChatReq, request: Request):
     """Public. Runs the AI receptionist against the clinic's approved config."""
+    # Cap AI spend from anonymous visitors: 30 messages per 10 min per visitor per clinic.
+    await rate_limit(db, request, "receptionist-chat", limit=30, window_minutes=10, key_suffix=req.clinic_id)
     cfg = await get_or_create_receptionist_config(req.clinic_id)
     if not cfg.get("enabled", True):
         raise HTTPException(404, "Receptionist not available")
@@ -1085,6 +1090,7 @@ app.include_router(build_compliance_routes(db, auth_dep))
 app.include_router(build_invitation_routes(db, auth_dep, lambda: os.environ.get("PUBLIC_APP_URL", "")))
 app.include_router(build_public_invite_routes(db))
 app.include_router(build_billing_cycle_routes(db, auth_dep))
+app.include_router(build_admin_lead_routes(db))
 
 # CORS — never combine wildcard origin with credentials. If CORS_ORIGINS="*" we drop
 # credentials to avoid reflecting arbitrary origins with cookies (SEC-003). In production
